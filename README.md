@@ -17,17 +17,7 @@ npm run preview
 
 - **Courses:** add an entry to `src/data/courses.js`, using the documented fields and a unique URL-safe slug. Each entry creates a course detail page. Links can point to teaching materials, demos or repositories.
 - **Labs:** add an entry to `src/data/labs.js`. For locally hosted applications put static files in `public/labs/<name>/` and link to `/labs/<name>/`; external URLs also work.
-- **Theses:** add an approved Markdown file under `src/content/theses/`. The file name becomes its URL. Use this frontmatter followed by the public topic description:
-
-```yaml
----
-title: "Topic title"
-level: "Master" # Bachelor or Master
-area: "Robotics"
-status: "Available" # Available or Closed
-summary: "A short public summary."
----
-```
+- **Theses:** approved snapshots are exported from the private teaching repository using its documented preview and approval workflow. The Markdown filename is the stable lowercase topic ID; do not copy internal records.
 
 - **Open source:** add verified public links to `src/data/resources.js`.
 

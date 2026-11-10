@@ -5,4 +5,4 @@ export async function getStaticPaths() { return (await getCollection('theses')).
 const { topic } = Astro.props;
 const { Content } = await render(topic);
 ---
-<Layout title={topic.data.title}><section class="page-intro shell"><a class="back" href="/theses/">← All thesis opportunities</a><div class="tag">{topic.data.level} / {topic.data.area} / {topic.data.status}</div><h1>{topic.data.title}</h1><p>{topic.data.summary}</p></section><article class="shell page-content prose"><Content /></article></Layout>
+<Layout title={`${topic.data.topicId}: ${topic.data.title}`}><section class="page-intro shell"><a class="back" href="/theses/">← All thesis opportunities</a><div class="tag">{topic.data.levelNote} · {topic.data.area} · {topic.data.category}</div><h1>{topic.data.topicId}: {topic.data.title}</h1><p><strong>Availability:</strong> {topic.data.availabilityNote}</p></section><article class="shell page-content prose"><Content /></article></Layout>
