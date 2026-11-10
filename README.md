@@ -4,7 +4,7 @@ Public teaching portal built with Astro. No private teaching material is include
 
 ## Develop locally
 
-Install Node.js 22, then run:
+Install Node.js 22.12 or later, then run:
 
 ```sh
 npm ci
@@ -31,7 +31,7 @@ summary: "A short public summary."
 
 - **Open source:** add verified public links to `src/data/resources.js`.
 
-Do not add confidential content. Empty sections are intentional until public material is approved.
+Do not add confidential content. Thesis announcements remain empty until public topics are approved.
 
 ## Publish
 

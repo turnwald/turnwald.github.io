@@ -5,4 +5,4 @@ export function getStaticPaths() { return courses.map(course => ({ params: { slu
 const { course } = Astro.props;
 const groups = [['Teaching materials', course.materials], ['Interactive demonstrations', course.demos], ['Repositories', course.repositories]];
 ---
-<Layout title={course.title}><section class="page-intro shell"><a class="back" href="/courses/">← All courses</a><h1>{course.title}<span class="accent">.</span></h1><p>{course.description}</p></section><section class="shell page-content detail">{groups.map(([title, links]) => <div><h2>{title}</h2>{links?.length ? <ul>{links.map(link => <li><a href={link.url}>{link.label} ↗</a></li>)}</ul> : <p>Resources will be added when available.</p>}</div>)}</section></Layout>
+<Layout title={course.title}><section class="page-intro shell"><a class="back" href="/courses/">← All courses</a><h1>{course.title}</h1><p>{course.description}</p></section><section class="shell page-content detail">{groups.map(([title, links]) => <div><h2>{title}</h2>{links?.length ? <ul>{links.map(link => <li><a href={link.url}>{link.label}</a></li>)}</ul> : <p>Resources will be added when available.</p>}</div>)}</section></Layout>

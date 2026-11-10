@@ -1,8 +1,14 @@
 ---
 import '../styles/global.css';
-const { title = 'Teaching in robotics and control', description = 'Teaching resources in robotics, control and autonomous systems at THI.' } = Astro.props;
-const links = [['Courses','/courses/'], ['Interactive labs','/labs/'], ['Theses','/theses/'], ['Open source','/resources/']];
+const { title = 'Teaching', description = 'Teaching resources in robotics, control and autonomous systems at Technische Hochschule Ingolstadt.' } = Astro.props;
+const links = [['Home','/'], ['Courses','/courses/'], ['Interactive labs','/labs/'], ['Theses','/theses/'], ['Resources','/resources/']];
 ---
-<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="color-scheme" content="light dark"/><title>{title} | Turnwald Teaching</title></head><body>
-<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="shell header-inner"><a class="brand" href="/" aria-label="Turnwald Teaching home"><span class="brand-mark">T<span>.</span></span><span>TURNWALD <small>TEACHING</small></span></a><nav aria-label="Main navigation">{links.map(([label, href]) => <a href={href} aria-current={Astro.url.pathname.startsWith(href) ? 'page' : undefined}>{label}</a>)}</nav></div></header>
-<main id="main"><slot /></main><footer><div class="shell footer-inner"><div><a class="brand footer-brand" href="/"><span class="brand-mark">T<span>.</span></span><span>TURNWALD <small>TEACHING</small></span></a><p>Robotics, control & autonomous systems.<br/>Technische Hochschule Ingolstadt</p></div><div class="footer-links"><a href="/courses/">Courses</a><a href="/labs/">Labs</a><a href="/theses/">Theses</a><a href="https://github.com/turnwald">GitHub ↗</a></div><span class="footer-note">LEARN · EXPLORE · BUILD</span></div></footer></body></html>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="color-scheme" content="light dark"/><title>{title} | Turnwald Teaching</title></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header"><div class="shell header-inner"><a class="brand" href="/">Turnwald Teaching</a><nav aria-label="Main navigation">{links.map(([label, href]) => <a href={href} aria-current={(href === '/' ? Astro.url.pathname === '/' : Astro.url.pathname.startsWith(href)) ? 'page' : undefined}>{label}</a>)}</nav></div></header>
+<main id="main"><slot /></main>
+<footer><div class="shell footer-inner"><p>Teaching in robotics, control and autonomous systems<br/>Technische Hochschule Ingolstadt</p><p><a href="https://github.com/turnwald">GitHub: turnwald</a> · <a href="https://github.com/THI-Robotics-Lab">THI Robotics Lab</a></p></div></footer>
+</body></html>
