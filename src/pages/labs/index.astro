@@ -1,0 +1,5 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { labs } from '../../data/labs.js';
+---
+<Layout title="Interactive labs"><section class="page-intro shell"><div class="eyebrow muted">02 / EXPERIMENT</div><h1>Interactive labs<span class="accent">.</span></h1><p>Explore ideas through demonstrations and browser-based learning applications.</p></section><section class="shell page-content">{labs.length ? <div class="listing">{labs.map(lab => <a class="list-card" href={lab.url}><div><span class="tag">{lab.kind}</span><h2>{lab.title}</h2><p>{lab.description}</p></div><span class="arrow">↗</span></a>)}</div> : <div class="empty"><span class="empty-symbol">◇</span><h2>Experiments are on their way.</h2><p>Interactive demonstrations and learning applications will be collected here.</p></div>}</section></Layout>

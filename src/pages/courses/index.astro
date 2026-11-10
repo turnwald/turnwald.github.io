@@ -1,0 +1,5 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { courses } from '../../data/courses.js';
+---
+<Layout title="Courses"><section class="page-intro shell"><div class="eyebrow muted">01 / LEARN</div><h1>Courses<span class="accent">.</span></h1><p>Teaching modules and resources in robotics, control and autonomous systems.</p></section><section class="shell page-content">{courses.length ? <div class="listing">{courses.map(course => <a class="list-card" href={`/courses/${course.slug}/`}><div><span class="tag">COURSE</span><h2>{course.title}</h2><p>{course.description}</p></div><span class="arrow">↗</span></a>)}</div> : <div class="empty"><span class="empty-symbol">↗</span><h2>Course pages are coming together.</h2><p>Module descriptions and teaching resources will appear here as they become available.</p></div>}</section></Layout>

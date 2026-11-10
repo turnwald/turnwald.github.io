@@ -1,0 +1,5 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { resources } from '../../data/resources.js';
+---
+<Layout title="Open-source resources"><section class="page-intro shell"><div class="eyebrow muted">04 / BUILD</div><h1>Open source<span class="accent">.</span></h1><p>Independent software and teaching projects to explore, use and build upon.</p></section><section class="shell page-content"><div class="listing">{resources.map(resource => <a class="list-card" href={resource.url}><div><span class="tag">{resource.tag} / GITHUB</span><h2>{resource.title}</h2><p>{resource.description}</p></div><span class="arrow">↗</span></a>)}</div></section></Layout>
