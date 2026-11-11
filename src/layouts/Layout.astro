@@ -1,14 +1,14 @@
 ---
 import '../styles/global.css';
-const { title = 'Teaching', description = 'Teaching resources in robotics, control and autonomous systems at Technische Hochschule Ingolstadt.' } = Astro.props;
+const { title = '', description = 'Teaching resources in robotics, control and autonomous systems at Technische Hochschule Ingolstadt.' } = Astro.props;
 const links = [['Home','/'], ['Courses','/courses/'], ['Interactive labs','/labs/'], ['Theses','/theses/'], ['Publications','/publications/'], ['Resources','/resources/']];
 ---
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="color-scheme" content="light dark"/><title>{title} | Turnwald Teaching</title></head>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="color-scheme" content="light dark"/><title>{title ? `${title} | Prof. Dr. Alen Turnwald` : 'Prof. Dr. Alen Turnwald'}</title></head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="site-header"><div class="shell header-inner"><a class="brand" href="/">Turnwald Teaching</a><nav aria-label="Main navigation">{links.map(([label, href]) => <a href={href} aria-current={(href === '/' ? Astro.url.pathname === '/' : Astro.url.pathname.startsWith(href)) ? 'page' : undefined}>{label}</a>)}</nav></div></header>
+<header class="site-header"><div class="shell header-inner"><a class="brand" href="/">Prof. Dr. Alen Turnwald</a><nav aria-label="Main navigation">{links.map(([label, href]) => <a href={href} aria-current={(href === '/' ? Astro.url.pathname === '/' : Astro.url.pathname.startsWith(href)) ? 'page' : undefined}>{label}</a>)}</nav></div></header>
 <main id="main"><slot /></main>
 <footer><div class="shell footer-inner"><p>Teaching in robotics, control and autonomous systems<br/>Technische Hochschule Ingolstadt</p><p><a href="https://github.com/turnwald">GitHub: turnwald</a> · <a href="https://github.com/THI-Robotics-Lab">THI Robotics Lab</a></p></div></footer>
 </body></html>

@@ -1,4 +1,44 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { demonstrations } from '../data/media.js';
 ---
-<Layout><div class="shell home"><section class="intro"><h1>Robotics and control teaching</h1><p>Teaching resources in robotics, control, autonomous systems and artificial intelligence in robotics at Technische Hochschule Ingolstadt.</p></section><section><h2>Explore</h2><div class="home-links"><div><h3><a href="/courses/">Courses</a></h3><p>Course materials and related repositories.</p></div><div><h3><a href="/labs/">Interactive labs</a></h3><p>Browser-based tools for exploring robotics.</p></div><div><h3><a href="/theses/">Thesis opportunities</a></h3><p>Public bachelor’s and master’s thesis announcements.</p></div><div><h3><a href="/resources/">Open-source resources</a></h3><p>Teaching repositories, software and the thesis template.</p></div></div></section><section class="featured"><h2>Featured resources</h2><ul><li><a href="/courses/model-predictive-control/">Model Predictive Control</a> — teaching notebooks and projects.</li><li><a href="https://thi-robotics-lab.github.io/robot-kinematics-lab/">Robot Kinematics Lab</a> — explore robot kinematics in your browser.</li><li><a href="https://github.com/THI-Robotics-Lab/Mobile-Robots-Practical-Lab">Mobile Robots Practical Lab</a> — practical exercises and a ROS workspace.</li></ul></section></div></Layout>
+<Layout>
+  <div class="shell home">
+    <section class="intro">
+      <h1>Robotics and control teaching</h1>
+      <p>Teaching resources in robotics, control, autonomous systems and artificial intelligence in robotics at Technische Hochschule Ingolstadt.</p>
+    </section>
+    <img class="home-lab-image" src="/media/robotics-lab.webp" alt="Mobile robots in the robotics laboratory" width="1200" height="676" />
+    <section>
+      <h2>Explore</h2>
+      <div class="home-links">
+        <div><h3><a href="/courses/">Courses</a></h3><p>Course materials and related repositories.</p></div>
+        <div><h3><a href="/labs/">Interactive labs</a></h3><p>Browser-based tools for exploring robotics.</p></div>
+        <div><h3><a href="/theses/">Thesis opportunities</a></h3><p>Public bachelor’s and master’s thesis announcements.</p></div>
+        <div><h3><a href="/resources/">Open-source resources</a></h3><p>Teaching repositories, software and the thesis template.</p></div>
+      </div>
+    </section>
+    <section>
+      <h2>Featured demonstrations</h2>
+      <div class="demonstrations">
+        {demonstrations.map(demo => (
+          <article class="demonstration">
+            <img src={demo.poster} alt={demo.alt} width="640" height="360" loading="lazy" />
+            <h3>{demo.title}</h3>
+            <p>{demo.description}</p>
+            {demo.projectUrl && <p><a href={demo.projectUrl}>{demo.projectLabel}</a></p>}
+            {demo.videoUrl && <p><a href={demo.videoUrl}>Watch video</a></p>}
+          </article>
+        ))}
+      </div>
+    </section>
+    <section class="featured">
+      <h2>Featured resources</h2>
+      <ul><li><a href="/courses/model-predictive-control/">Model Predictive Control</a> — teaching notebooks and projects.</li><li><a href="https://thi-robotics-lab.github.io/robot-kinematics-lab/">Robot Kinematics Lab</a> — explore robot kinematics in your browser.</li><li><a href="https://github.com/THI-Robotics-Lab/Mobile-Robots-Practical-Lab">Mobile Robots Practical Lab</a> — practical exercises and a ROS workspace.</li></ul>
+    </section>
+    <section class="profile">
+      <img src="/media/alen-turnwald.webp" alt="Alen Turnwald" width="320" height="341" loading="lazy" />
+      <div><h2>About</h2><p>Alen Turnwald is a professor of robotics at Technische Hochschule Ingolstadt, teaching robotics, control and autonomous systems.</p></div>
+    </section>
+  </div>
+</Layout>

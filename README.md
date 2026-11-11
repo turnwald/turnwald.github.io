@@ -20,6 +20,7 @@ npm run preview
 - **Theses:** approved open snapshots and curated, anonymized status records are exported from the private teaching repository through its review workflow. `src/data/thesis-history.json` contains only approved public status records; non-available IDs suppress matching open pages. Do not copy internal records.
 
 - **Publications:** update `src/data/publications.json` with verified metadata and links; use `proceedingsUrl` for an additional IEEE proceedings link and `manuscriptUrl` for an author manuscript. Entries are sorted by year on the site.
+- **Featured demonstrations:** update `src/data/media.js`; add only verified external video URLs to `videoUrl`. Keep original media and video files outside this repository, and use optimized images or posters in `public/media/` after checking publication rights.
 - **Open source:** add verified public links to `src/data/resources.js`.
 
 Do not add confidential content. Status records require explicit review before publication.
