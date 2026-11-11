@@ -23,7 +23,10 @@ import { demonstrations } from '../data/media.js';
       <div class="demonstrations">
         {demonstrations.map(demo => (
           <article class="demonstration">
-            <img src={demo.poster} alt={demo.alt} width="640" height="360" loading="lazy" />
+            <picture>
+              <source media="(prefers-reduced-motion: reduce)" srcset={demo.poster} />
+              <img src={demo.animation || demo.poster} alt={demo.alt} width="640" height="360" loading="lazy" />
+            </picture>
             <h3>{demo.title}</h3>
             <p>{demo.description}</p>
             {demo.projectUrl && <p><a href={demo.projectUrl}>{demo.projectLabel}</a></p>}
