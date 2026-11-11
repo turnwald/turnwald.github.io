@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "id": "TH01",
+    "status": "In progress",
+    "title": "Robot Coordination and Simulation",
+    "area": "Robotics"
+  },
+  {
+    "id": "ST02",
+    "status": "In progress",
+    "title": "Safety Filters for Robotic Manipulation",
+    "area": "Robotics"
+  },
+  {
+    "id": "TH02",
+    "status": "In progress",
+    "title": "Robotic Testbeds for Spacecraft Simulation",
+    "area": "Space robotics"
+  },
+  {
+    "id": "TH03",
+    "status": "Completed",
+    "title": "Planning for Mobile Robots",
+    "area": "Mobile robotics"
+  },
+  {
+    "id": "TH04",
+    "status": "Completed",
+    "title": "Sensor Fusion for Mobile Robot Localization",
+    "area": "Mobile robotics"
+  },
+  {
+    "id": "TH05",
+    "status": "Completed",
+    "title": "Trajectory Planning for Robotic Systems",
+    "area": "Robotics"
+  },
+  {
+    "id": "TH06",
+    "status": "Completed",
+    "title": "Robotic Inspection and Imaging",
+    "area": "Robotics"
+  }
+]
