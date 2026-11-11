@@ -22,12 +22,9 @@ import { demonstrations } from '../data/media.js';
       <h2>Featured demonstrations</h2>
       <div class="demonstrations">
         {demonstrations.map(demo => (
-          <article class:list={["demonstration", { "demonstration-wide": demo.wide }]}>
-            <img src={demo.animation || demo.poster} alt={demo.alt} width={demo.wide ? 800 : 640} height={demo.wide ? 221 : 360} loading="lazy" />
-            <h3>{demo.title}</h3>
-            <p>{demo.description}</p>
-            {demo.projectUrl && <p><a href={demo.projectUrl}>{demo.projectLabel}</a></p>}
-            {demo.videoUrl && <p><a href={demo.videoUrl}>Watch video</a></p>}
+          <article class="demonstration">
+            <img src={demo.animation || demo.poster} alt={demo.alt} width="640" height="360" loading="lazy" />
+            <h3>{demo.projectUrl || demo.videoUrl ? <a href={demo.projectUrl || demo.videoUrl}>{demo.title}</a> : demo.title}</h3>
           </article>
         ))}
       </div>
