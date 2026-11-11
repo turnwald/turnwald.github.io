@@ -1,0 +1,113 @@
+[
+    {
+        "year":  2026,
+        "title":  "Control Barrier Functions for Safe Free-Flying Robotic Spacecraft Operations in Tumbling Target Capture",
+        "authors":  "Alexander Meinert, Peter Stadler, Niklas Baldauf, Alen Turnwald",
+        "venue":  "Accepted to the International Conference on Space Robotics (iSpaRo) 2026; arXiv preprint",
+        "url":  "https://arxiv.org/abs/2609.25905"
+    },
+    {
+        "year":  2026,
+        "title":  "Safety-Guaranteed Imitation Learning from Nonlinear Model Predictive Control for Spacecraft Close Proximity Operations",
+        "authors":  "Alexander Meinert, Niklas Baldauf, Peter Stadler, Alen Turnwald",
+        "venue":  "Accepted at the European Control Conference (ECC) 2026; arXiv preprint",
+        "url":  "https://arxiv.org/abs/2603.18910"
+    },
+    {
+        "year":  2026,
+        "title":  "Lightweight Model Predictive Control for Spacecraft Rendezvous Attitude Synchronization",
+        "authors":  "Peter Stadler, Alexander Meinert, Niklas Baldauf, Alen Turnwald",
+        "venue":  "Accepted at the European Control Conference (ECC) 2026; arXiv preprint",
+        "url":  "https://arxiv.org/abs/2603.18921"
+    },
+    {
+        "year":  2024,
+        "title":  "Towards learning-based trajectory tracking control for a planetary exploration rover: Development and testing",
+        "authors":  "Kristin Lakatos, Niklas Baldauf, Alen Turnwald",
+        "venue":  "International Conference on Space Robotics (iSpaRo)",
+        "url":  "https://doi.org/10.1109/iSpaRo60631.2024.10687897"
+    },
+    {
+        "year":  2024,
+        "title":  "Robust Spacecraft Attitude Reference Tracking using Tube-Based Model Predictive Control",
+        "authors":  "Alexander Meinert, Niklas Baldauf, Alen Turnwald",
+        "venue":  "International Conference on System Theory, Control and Computing (ICSTCC)",
+        "url":  "https://doi.org/10.1109/ICSTCC62912.2024.10744677"
+    },
+    {
+        "year":  2024,
+        "title":  "Towards learning-based trajectory tracking control for a planetary exploration rover: Adaptive model predictive control",
+        "authors":  "Niklas Baldauf, Kristin Lakatos, Alexander Meinert, Alen Turnwald",
+        "venue":  "International Conference on System Theory, Control and Computing (ICSTCC)",
+        "url":  "https://doi.org/10.1109/ICSTCC62912.2024.10744714"
+    },
+    {
+        "year":  2023,
+        "title":  "Constraints-Aware Trajectory Tracking Control of Spacecraft Attitude using LPV and MPC",
+        "authors":  "Alen Turnwald, Niklas Baldauf",
+        "venue":  "International Conference on Methods and Models in Automation and Robotics (MMAR)",
+        "url":  "https://doi.org/10.1109/MMAR58394.2023.10242430"
+    },
+    {
+        "year":  2023,
+        "title":  "Iterative learning-based model predictive control for mobile robots in space applications",
+        "authors":  "Niklas Baldauf, Alen Turnwald",
+        "venue":  "International Conference on Methods and Models in Automation and Robotics (MMAR)",
+        "url":  "https://doi.org/10.1109/MMAR58394.2023.10242548"
+    },
+    {
+        "year":  2023,
+        "title":  "Learning-based motion control of a rover on unknown ground",
+        "authors":  "Niklas Baldauf, Alen Turnwald, Toni Lubiniecki, Kristin Lakatos, Nickolaos Panagiotopoulos",
+        "venue":  "ESA International Conference on Guidance, Navigation \u0026 Control Systems (GNC)",
+        "url":  "https://doi.org/10.5270/esa-gnc-icatt-2023-061"
+    },
+    {
+        "year":  2023,
+        "title":  "Robust Machine Learning Systems For Dependable Space Applications",
+        "authors":  "Nikolaos Panagiotopoulos, Toni Lubiniecki, Alen Turnwald, Niklas Baldauf",
+        "venue":  "European Data Handling \u0026 Data Processing Conference (EDHPC)",
+        "url":  "https://doi.org/10.23919/EDHPC59100.2023.10396116"
+    },
+    {
+        "year":  2019,
+        "title":  "Motion Planning and Experimental Validation for an Autonomous Bicycle",
+        "authors":  "Alen Turnwald, Steven Liu",
+        "venue":  "IECON 2019",
+        "url":  "https://doi.org/10.1109/iecon.2019.8927829"
+    },
+    {
+        "year":  2018,
+        "title":  "Passivity-Based Trajectory Tracking Control for an Autonomous Bicycle",
+        "authors":  "Alen Turnwald, Matthias Schäfer, Steven Liu",
+        "venue":  "IECON 2018",
+        "url":  "https://doi.org/10.1109/iecon.2018.8591382"
+    },
+    {
+        "year":  2018,
+        "title":  "Adaptive Trajectory Tracking for a Planar Two-Wheeled Vehicle with Positive Trail",
+        "authors":  "Alen Turnwald, Steven Liu",
+        "venue":  "IEEE Conference on Control Technology and Applications (CCTA)",
+        "url":  "https://doi.org/10.1109/ccta.2018.8511396"
+    },
+    {
+        "year":  2018,
+        "title":  "A Nonlinear Bike Model for Purposes of Controller and Observer Design",
+        "authors":  "Alen Turnwald, Steven Liu",
+        "venue":  "International Conference on Mathematical Modelling (MATHMOD)",
+        "url":  "https://doi.org/10.1016/j.ifacol.2018.03.067"
+    },
+    {
+        "year":  2017,
+        "title":  "A Platform for Experimental Education of Control Science",
+        "authors":  "Alen Turnwald, Francisco J. Garcia, Dina Martynova, Zhijie Lin, Wen-An Zhang, Steven Liu",
+        "venue":  "IFAC World Congress"
+    },
+    {
+        "year":  2017,
+        "title":  "Passivity-Based Control of a Cryogenic Upper Stage to Minimize Fuel Sloshing",
+        "authors":  "Alen Turnwald, Thimo Oehlschlägel",
+        "venue":  "Journal of Guidance, Control, and Dynamics",
+        "url":  "https://doi.org/10.2514/1.G001591"
+    }
+]

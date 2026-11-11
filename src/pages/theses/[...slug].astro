@@ -1,7 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { getCollection, render } from 'astro:content';
-export async function getStaticPaths() { return (await getCollection('theses')).map(topic => ({ params: { slug: topic.id }, props: { topic } })); }
+import { unavailableIds } from '../../data/thesis-history.js';
+export async function getStaticPaths() { return (await getCollection('theses')).filter(topic => !unavailableIds.has(topic.data.topicId)).map(topic => ({ params: { slug: topic.id }, props: { topic } })); }
 const { topic } = Astro.props;
 const { Content } = await render(topic);
 ---

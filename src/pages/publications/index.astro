@@ -1,0 +1,7 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import publications from '../../data/publications.json';
+const entries = [...publications].sort((a,b) => b.year - a.year);
+const years = [...new Set(entries.map(entry => entry.year))];
+---
+<Layout title="Publications"><section class="page-intro shell"><h1>Publications</h1><p>Selected publications by Alen Turnwald in robotics, control and autonomous systems.</p></section><section class="shell page-content"><p>See also the <a href="https://www.thi.de/personen/alen-turnwald/">THI profile</a> and <a href="https://www.thi.de/fileadmin/daten/fakultaetE/Professorenseiten/Veroeffentlichungen_Turnwald_2025.pdf">THI publication list</a>.</p>{years.map(year => <section class="publication-year"><h2>{year}</h2><div class="listing">{entries.filter(entry => entry.year === year).map(entry => <article class="publication-item"><h3>{entry.title}</h3><p>{entry.authors}</p><p>{entry.venue}{entry.url && <> · <a href={entry.url}>View publication</a></>}</p></article>)}</div></section>)}</section></Layout>
