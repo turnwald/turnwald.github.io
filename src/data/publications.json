@@ -10,22 +10,25 @@
         "year":  2026,
         "title":  "Safety-Guaranteed Imitation Learning from Nonlinear Model Predictive Control for Spacecraft Close Proximity Operations",
         "authors":  "Alexander Meinert, Niklas Baldauf, Peter Stadler, Alen Turnwald",
-        "venue":  "Accepted at the European Control Conference (ECC) 2026; arXiv preprint",
-        "url":  "https://arxiv.org/abs/2603.18910"
+        "venue":  "European Control Conference (ECC) 2026, pp. 1453–1458",
+        "url":  "https://arxiv.org/abs/2603.18910",
+        "proceedingsUrl":  "https://ieeexplore.ieee.org/document/11625271"
     },
     {
         "year":  2026,
         "title":  "Lightweight Model Predictive Control for Spacecraft Rendezvous Attitude Synchronization",
         "authors":  "Peter Stadler, Alexander Meinert, Niklas Baldauf, Alen Turnwald",
-        "venue":  "Accepted at the European Control Conference (ECC) 2026; arXiv preprint",
-        "url":  "https://arxiv.org/abs/2603.18921"
+        "venue":  "European Control Conference (ECC) 2026, pp. 3748–3753",
+        "url":  "https://arxiv.org/abs/2603.18921",
+        "proceedingsUrl":  "https://ieeexplore.ieee.org/document/11625426"
     },
     {
         "year":  2024,
         "title":  "Towards learning-based trajectory tracking control for a planetary exploration rover: Development and testing",
         "authors":  "Kristin Lakatos, Niklas Baldauf, Alen Turnwald",
         "venue":  "International Conference on Space Robotics (iSpaRo)",
-        "url":  "https://doi.org/10.1109/iSpaRo60631.2024.10687897"
+        "url":  "https://doi.org/10.1109/iSpaRo60631.2024.10687897",
+        "manuscriptUrl":  "https://elib.dlr.de/205478/"
     },
     {
         "year":  2024,
@@ -39,7 +42,8 @@
         "title":  "Towards learning-based trajectory tracking control for a planetary exploration rover: Adaptive model predictive control",
         "authors":  "Niklas Baldauf, Kristin Lakatos, Alexander Meinert, Alen Turnwald",
         "venue":  "International Conference on System Theory, Control and Computing (ICSTCC)",
-        "url":  "https://doi.org/10.1109/ICSTCC62912.2024.10744714"
+        "url":  "https://doi.org/10.1109/ICSTCC62912.2024.10744714",
+        "manuscriptUrl":  "https://elib.dlr.de/207853/"
     },
     {
         "year":  2023,

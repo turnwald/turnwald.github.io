@@ -19,7 +19,7 @@ npm run preview
 - **Labs:** add an entry to `src/data/labs.js`. For locally hosted applications put static files in `public/labs/<name>/` and link to `/labs/<name>/`; external URLs also work.
 - **Theses:** approved open snapshots and curated, anonymized status records are exported from the private teaching repository through its review workflow. `src/data/thesis-history.json` contains only approved public status records; non-available IDs suppress matching open pages. Do not copy internal records.
 
-- **Publications:** update `src/data/publications.json` with verified metadata and links; entries are sorted by year on the site.
+- **Publications:** update `src/data/publications.json` with verified metadata and links; use `proceedingsUrl` for an additional IEEE proceedings link and `manuscriptUrl` for an author manuscript. Entries are sorted by year on the site.
 - **Open source:** add verified public links to `src/data/resources.js`.
 
 Do not add confidential content. Status records require explicit review before publication.
