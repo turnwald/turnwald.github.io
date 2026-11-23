@@ -3,6 +3,22 @@ import Layout from '../../layouts/Layout.astro';
 import { courses } from '../../data/courses.js';
 export function getStaticPaths() { return courses.map(course => ({ params: { slug: course.slug }, props: { course } })); }
 const { course } = Astro.props;
-const groups = [['Teaching materials', course.materials], ['Interactive demonstrations', course.demos], ['Repositories', course.repositories]];
+const demoGroups = new Map();
+for (const demo of course.demos || []) {
+  const topic = demo.topic || '';
+  if (!demoGroups.has(topic)) demoGroups.set(topic, []);
+  demoGroups.get(topic).push(demo);
+}
+const hasTopics = [...demoGroups.keys()].some(Boolean);
 ---
-<Layout title={course.title}><section class="page-intro shell"><a class="back" href="/courses/">← All courses</a><h1>{course.title}</h1><p>{course.description}</p></section><section class="shell page-content detail">{groups.map(([title, links]) => <div><h2>{title}</h2>{links?.length ? <ul>{links.map(link => <li><a href={link.url}>{link.label}</a></li>)}</ul> : <p>Resources will be added when available.</p>}</div>)}</section></Layout>
+<Layout title={course.title}>
+  <section class="page-intro shell"><a class="back" href="/courses/">← All courses</a><h1>{course.title}</h1><p>{course.description}</p></section>
+  <section class:list={['shell', 'page-content', 'detail', { 'detail-grouped': hasTopics }]}>
+    <div><h2>Teaching materials</h2>{course.materials?.length ? <ul>{course.materials.map(link => <li><a href={link.url}>{link.label}</a></li>)}</ul> : <p>Resources will be added when available.</p>}</div>
+    <div class="course-demos">
+      <h2>{hasTopics ? 'Interactive demonstrations / Interaktive Demonstrationen' : 'Interactive demonstrations'}</h2>
+      {demoGroups.size ? [...demoGroups].map(([topic, links]) => <div>{topic && <h3>{topic}</h3>}<ul>{links.map(link => <li><a href={link.url}>{link.label}</a></li>)}</ul></div>) : <p>Resources will be added when available.</p>}
+    </div>
+    <div><h2>Repositories</h2>{course.repositories?.length ? <ul>{course.repositories.map(link => <li><a href={link.url}>{link.label}</a></li>)}</ul> : <p>Resources will be added when available.</p>}</div>
+  </section>
+</Layout>
