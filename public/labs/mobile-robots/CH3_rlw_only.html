@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rimless Wheel</title>
+<style>
+body{
+  font-family:Arial,Helvetica,sans-serif;
+  margin:20px;
+  color:#111;
+  background:#fff;
+}
+.controls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px 22px;
+  align-items:center;
+  padding:12px 14px;
+  border:1px solid #ddd;
+  border-radius:10px;
+  margin-bottom:16px;
+  background:#fafafa;
+}
+.controls label{font-size:14px}
+button{
+  font-size:14px;
+  padding:7px 14px;
+  border:1px solid #999;
+  border-radius:6px;
+  background:#fff;
+  cursor:pointer;
+}
+button:hover{background:#f2f2f2}
+input[type="range"]{width:320px;vertical-align:middle}
+.panel{
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:10px;
+  background:#fff;
+}
+.panel h2{
+  text-align:center;
+  margin:6px 0 8px 0;
+  font-size:22px;
+}
+svg{width:100%;height:auto;background:#fff}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <button id="playBtn">Play</button>
+  <button id="resetBtn">Reset</button>
+  <label>
+    phase
+    <input id="phaseSlider" type="range" min="0" max="1000" value="0" />
+    <span id="phaseVal">0.000</span>
+  </label>
+</div>
+
+<div class="panel">
+  <h2>Rimless wheel</h2>
+  <svg id="svgWheel" viewBox="0 0 980 420"></svg>
+</div>
+
+<script>
+(() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById("svgWheel");
+  const playBtn = document.getElementById("playBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const phaseSlider = document.getElementById("phaseSlider");
+  const phaseVal = document.getElementById("phaseVal");
+
+  const N = 8;
+  const alpha = 2*Math.PI/N;
+  const l = 1.0;
+  const d = 2*l*Math.sin(alpha/2);
+  const totalSteps = 8;
+
+  const marginX = 52;
+  const groundYpx = 340;
+  const scale = 118;
+
+  const playbackSpeed = 0.75; // steps/s, fixed
+
+  let playing = false;
+  let u = 0;
+  let lastT = null;
+
+  function add(parent, tag, attrs={}) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+    parent.appendChild(el);
+    return el;
+  }
+
+  function clear() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function wx(x){ return marginX + x*scale; }
+  function wy(y){ return groundYpx - y*scale; }
+
+  function marker(id, color){
+    const defs = add(svg,"defs");
+    const m = add(defs,"marker",{
+      id, viewBox:"0 0 10 10", refX:"9", refY:"5",
+      markerWidth:"7", markerHeight:"7", orient:"auto-start-reverse"
+    });
+    add(m,"path",{d:"M 0 0 L 10 5 L 0 10 z",fill:color});
+  }
+
+  function hub(contactX, theta){
+    return {
+      x: contactX + l*Math.sin(theta),
+      y: l*Math.cos(theta)
+    };
+  }
+
+  function splitPhase(){
+    if (u >= totalSteps) return {k: totalSteps-1, s:1};
+    const k = Math.max(0, Math.floor(u));
+    return {k, s:u-k};
+  }
+
+  function ground(){
+    const xmax = totalSteps*d + 1.25;
+    add(svg,"line",{
+      x1:wx(0), y1:wy(0), x2:wx(xmax), y2:wy(0),
+      stroke:"#111","stroke-width":3
+    });
+    for(let x=0;x<=xmax;x+=0.18){
+      add(svg,"line",{
+        x1:wx(x),y1:wy(0),x2:wx(x+0.08),y2:wy(-0.08),
+        stroke:"#777","stroke-width":1
+      });
+    }
+  }
+
+  function drawContacts(currentK){
+    for(let i=0;i<=totalSteps;i++){
+      const past = i < currentK;
+      const current = i === currentK;
+      const next = i === currentK+1;
+      add(svg,"circle",{
+        cx:wx(i*d),cy:wy(0),
+        r:current?8:5,
+        fill:current?"#f59e0b":(past?"#bdbdbd":"#efefef"),
+        stroke:current?"#c2410c":"#777",
+        "stroke-width":current?2:1.5,
+        opacity:(past||current||next)?1:0.35
+      });
+    }
+  }
+
+  function accumulatedPath(){
+    const pts=[];
+    const {k,s}=splitPhase();
+    for(let step=0;step<=k;step++){
+      const localEnd=(step<k)?1:s;
+      const samples=Math.max(2,Math.ceil(50*localEnd));
+      const contactX=step*d;
+      for(let i=0;i<=samples;i++){
+        const si=localEnd*i/samples;
+        const theta=-alpha/2+alpha*si;
+        pts.push(hub(contactX,theta));
+      }
+    }
+    return pts;
+  }
+
+  function drawPath(){
+    const pts=accumulatedPath();
+    if(pts.length<2) return;
+    let path="";
+    pts.forEach((p,i)=>{
+      path += (i===0?"M ":" L ") + wx(p.x)+" "+wy(p.y);
+    });
+    add(svg,"path",{
+      d:path, fill:"none", stroke:"#2563eb","stroke-width":3,
+      "stroke-dasharray":"9 7","marker-end":"url(#blueArrow)"
+    });
+  }
+
+  function redraw(){
+    clear();
+    marker("blueArrow","#2563eb");
+    marker("blackArrow","#111");
+    ground();
+
+    const {k,s}=splitPhase();
+    const theta=-alpha/2+alpha*s;
+    const contactX=k*d;
+    const H=hub(contactX,theta);
+
+    drawPath();
+    drawContacts(k);
+
+    for(let j=0;j<N;j++){
+      const phi=theta+j*alpha;
+      const ex=H.x+l*Math.sin(phi);
+      const ey=H.y+l*Math.cos(phi);
+      add(svg,"line",{
+        x1:wx(H.x),y1:wy(H.y),x2:wx(ex),y2:wy(ey),
+        stroke:"#111","stroke-width":4
+      });
+    }
+
+    add(svg,"circle",{
+      cx:wx(H.x),cy:wy(H.y),r:18,
+      fill:"#ddd",stroke:"#333","stroke-width":2.5
+    });
+
+    add(svg,"text",{
+      x:430,y:58,fill:"#2563eb",
+      "font-size":21,"font-family":"Arial"
+    }).textContent="accumulated hub path";
+
+    add(svg,"text",{
+      x:wx(contactX),y:wy(-0.28),
+      "text-anchor":"middle","font-size":18,"font-family":"Arial"
+    }).textContent="stance contact";
+
+    add(svg,"line",{
+      x1:155,y1:388,x2:300,y2:388,
+      stroke:"#111","stroke-width":3,
+      "marker-end":"url(#blackArrow)"
+    });
+
+    add(svg,"text",{
+      x:228,y:413,"text-anchor":"middle",
+      "font-size":18,"font-family":"Arial"
+    }).textContent="motion to the right";
+
+    phaseVal.textContent=u.toFixed(3);
+    phaseSlider.value=Math.round((u/totalSteps)*1000);
+  }
+
+  function animate(ts){
+    if(!playing) return;
+    if(lastT===null) lastT=ts;
+    const dt=(ts-lastT)/1000;
+    lastT=ts;
+    u += playbackSpeed*dt;
+    if(u>=totalSteps){
+      u=totalSteps;
+      playing=false;
+      playBtn.textContent="Play";
+    }
+    redraw();
+    if(playing) requestAnimationFrame(animate);
+  }
+
+  playBtn.addEventListener("click",()=>{
+    playing=!playing;
+    playBtn.textContent=playing?"Pause":"Play";
+    lastT=null;
+    if(playing){
+      if(u>=totalSteps) u=0;
+      requestAnimationFrame(animate);
+    }
+  });
+
+  resetBtn.addEventListener("click",()=>{
+    playing=false;
+    playBtn.textContent="Play";
+    u=0;
+    lastT=null;
+    redraw();
+  });
+
+  phaseSlider.addEventListener("input",()=>{
+    playing=false;
+    playBtn.textContent="Play";
+    u=totalSteps*(parseInt(phaseSlider.value,10)/1000);
+    redraw();
+  });
+
+  redraw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rimless Wheel and Straight-Leg Walker</title>
+<style>
+body{
+  font-family:Arial,Helvetica,sans-serif;
+  margin:20px;
+  color:#111;
+  background:#fff;
+}
+.controls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px 22px;
+  align-items:center;
+  padding:12px 14px;
+  border:1px solid #ddd;
+  border-radius:10px;
+  margin-bottom:16px;
+  background:#fafafa;
+}
+.controls label{font-size:14px}
+button{
+  font-size:14px;
+  padding:7px 14px;
+  border:1px solid #999;
+  border-radius:6px;
+  background:#fff;
+  cursor:pointer;
+}
+button:hover{background:#f2f2f2}
+input[type="range"]{width:300px;vertical-align:middle}
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+.panel{
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:10px;
+  background:#fff;
+}
+.panel h2{
+  text-align:center;
+  margin:6px 0 8px 0;
+  font-size:22px;
+}
+svg{width:100%;height:auto;background:#fff}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <button id="playBtn">Play</button>
+  <button id="resetBtn">Reset</button>
+  <label>
+    phase
+    <input id="phaseSlider" type="range" min="0" max="1000" value="0" />
+    <span id="phaseVal">0.000</span>
+  </label>
+</div>
+
+<div class="row">
+  <div class="panel">
+    <h2>Rimless wheel</h2>
+    <svg id="svgWheel" viewBox="0 0 640 420"></svg>
+  </div>
+
+  <div class="panel">
+    <h2>Straight-leg walker</h2>
+    <svg id="svgWalker" viewBox="0 0 640 420"></svg>
+  </div>
+</div>
+
+<script>
+(() => {
+  const NS="http://www.w3.org/2000/svg";
+  const svgWheel=document.getElementById("svgWheel");
+  const svgWalker=document.getElementById("svgWalker");
+  const playBtn=document.getElementById("playBtn");
+  const resetBtn=document.getElementById("resetBtn");
+  const phaseSlider=document.getElementById("phaseSlider");
+  const phaseVal=document.getElementById("phaseVal");
+
+  const N=8;
+  const alpha=2*Math.PI/N;
+  const l=1.0;
+  const d=2*l*Math.sin(alpha/2);
+  const totalSteps=6;
+  const playbackSpeed=0.75; // steps/s, fixed
+
+  const marginX=36;
+  const groundYpx=340;
+  const scale=120;
+
+  let playing=false;
+  let u=0;
+  let lastT=null;
+
+  function add(parent,tag,attrs={}){
+    const el=document.createElementNS(NS,tag);
+    for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+    parent.appendChild(el);
+    return el;
+  }
+
+  function clear(svg){
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function wx(x){return marginX+x*scale;}
+  function wy(y){return groundYpx-y*scale;}
+
+  function marker(svg,id,color){
+    const defs=add(svg,"defs");
+    const m=add(defs,"marker",{
+      id,viewBox:"0 0 10 10",refX:"9",refY:"5",
+      markerWidth:"7",markerHeight:"7",orient:"auto-start-reverse"
+    });
+    add(m,"path",{d:"M 0 0 L 10 5 L 0 10 z",fill:color});
+  }
+
+  function hub(contactX,theta){
+    return {x:contactX+l*Math.sin(theta),y:l*Math.cos(theta)};
+  }
+
+  function splitPhase(){
+    if(u>=totalSteps) return {k:totalSteps-1,s:1};
+    const k=Math.max(0,Math.floor(u));
+    return {k,s:u-k};
+  }
+
+  function ground(svg){
+    const xmax=totalSteps*d+1.4;
+    add(svg,"line",{
+      x1:wx(0),y1:wy(0),x2:wx(xmax),y2:wy(0),
+      stroke:"#111","stroke-width":3
+    });
+    for(let x=0;x<=xmax;x+=0.18){
+      add(svg,"line",{
+        x1:wx(x),y1:wy(0),x2:wx(x+0.08),y2:wy(-0.08),
+        stroke:"#777","stroke-width":1
+      });
+    }
+  }
+
+  function drawContacts(svg,currentK){
+    for(let i=0;i<=totalSteps;i++){
+      const past=i<currentK;
+      const current=i===currentK;
+      const next=i===currentK+1;
+      add(svg,"circle",{
+        cx:wx(i*d),cy:wy(0),
+        r:current?8:5,
+        fill:current?"#f59e0b":(past?"#bdbdbd":"#efefef"),
+        stroke:current?"#c2410c":"#777",
+        "stroke-width":current?2:1.5,
+        opacity:(past||current||next)?1:0.35
+      });
+    }
+  }
+
+  function accumulatedBasePath(){
+    const pts=[];
+    const {k,s}=splitPhase();
+    for(let step=0;step<=k;step++){
+      const localEnd=(step<k)?1:s;
+      const contactX=step*d;
+      const samples=Math.max(2,Math.ceil(50*localEnd));
+      for(let i=0;i<=samples;i++){
+        const si=localEnd*i/samples;
+        const theta=-alpha/2+alpha*si;
+        pts.push(hub(contactX,theta));
+      }
+    }
+    return pts;
+  }
+
+  function drawBasePath(svg,markerId){
+    const pts=accumulatedBasePath();
+    if(pts.length<2) return;
+    let path="";
+    pts.forEach((p,i)=>{
+      path+=(i===0?"M ":" L ")+wx(p.x)+" "+wy(p.y);
+    });
+    add(svg,"path",{
+      d:path,fill:"none",stroke:"#2563eb","stroke-width":3,
+      "stroke-dasharray":"9 7","marker-end":`url(#${markerId})`
+    });
+  }
+
+  function drawWheel(){
+    clear(svgWheel);
+    marker(svgWheel,"blueWheel","#2563eb");
+    marker(svgWheel,"blackWheel","#111");
+    ground(svgWheel);
+
+    const {k,s}=splitPhase();
+    const theta=-alpha/2+alpha*s;
+    const contactX=k*d;
+    const H=hub(contactX,theta);
+
+    drawBasePath(svgWheel,"blueWheel");
+    drawContacts(svgWheel,k);
+
+    for(let j=0;j<N;j++){
+      const phi=theta+j*alpha;
+      const ex=H.x+l*Math.sin(phi);
+      const ey=H.y+l*Math.cos(phi);
+      add(svgWheel,"line",{
+        x1:wx(H.x),y1:wy(H.y),x2:wx(ex),y2:wy(ey),
+        stroke:"#111","stroke-width":4
+      });
+    }
+
+    add(svgWheel,"circle",{
+      cx:wx(H.x),cy:wy(H.y),r:18,
+      fill:"#ddd",stroke:"#333","stroke-width":2.5
+    });
+
+    add(svgWheel,"text",{
+      x:300,y:58,fill:"#2563eb",
+      "font-size":21,"font-family":"Arial"
+    }).textContent="accumulated hub path";
+
+    add(svgWheel,"text",{
+      x:wx(contactX),y:wy(-0.28),
+      "text-anchor":"middle","font-size":18,"font-family":"Arial"
+    }).textContent="stance contact";
+
+    add(svgWheel,"line",{
+      x1:140,y1:388,x2:270,y2:388,
+      stroke:"#111","stroke-width":3,
+      "marker-end":"url(#blackWheel)"
+    });
+
+    add(svgWheel,"text",{
+      x:205,y:413,"text-anchor":"middle",
+      "font-size":18,"font-family":"Arial"
+    }).textContent="motion to the right";
+  }
+
+  function drawWalker(){
+    clear(svgWalker);
+    marker(svgWalker,"blueWalker","#2563eb");
+    marker(svgWalker,"blackWalker","#111");
+    ground(svgWalker);
+
+    const {k,s}=splitPhase();
+    const theta=-alpha/2+alpha*s;
+    const contactX=k*d;
+    const H=hub(contactX,theta);
+
+    // Small fixed swing offset for ground clearance.
+    const beta=15*Math.PI/180;
+    const gamma=-alpha/2+alpha*s+beta*Math.sin(Math.PI*s);
+    const Fsw={
+      x:H.x+l*Math.sin(gamma),
+      y:H.y-l*Math.cos(gamma)
+    };
+
+    drawBasePath(svgWalker,"blueWalker");
+    drawContacts(svgWalker,k);
+
+    // Current swing-foot trajectory up to current phase.
+    let footPath="";
+    const samples=70;
+    for(let i=0;i<=samples;i++){
+      const si=s*i/samples;
+      const th=-alpha/2+alpha*si;
+      const Hi=hub(contactX,th);
+      const gi=-alpha/2+alpha*si+beta*Math.sin(Math.PI*si);
+      const Fi={
+        x:Hi.x+l*Math.sin(gi),
+        y:Hi.y-l*Math.cos(gi)
+      };
+      footPath+=(i===0?"M ":" L ")+wx(Fi.x)+" "+wy(Fi.y);
+    }
+    add(svgWalker,"path",{
+      d:footPath,fill:"none",stroke:"#8a8a8a","stroke-width":2,
+      "stroke-dasharray":"6 6"
+    });
+
+    // Current pose only -- no ghost/shadow pose.
+    add(svgWalker,"line",{
+      x1:wx(H.x),y1:wy(H.y),x2:wx(contactX),y2:wy(0),
+      stroke:"#111","stroke-width":7
+    });
+    add(svgWalker,"line",{
+      x1:wx(H.x),y1:wy(H.y),x2:wx(Fsw.x),y2:wy(Fsw.y),
+      stroke:"#111","stroke-width":7
+    });
+
+    add(svgWalker,"circle",{
+      cx:wx(H.x),cy:wy(H.y),r:22,
+      fill:"#ddd",stroke:"#333","stroke-width":2.5
+    });
+    add(svgWalker,"circle",{
+      cx:wx(Fsw.x),cy:wy(Fsw.y),r:7,
+      fill:"#fff",stroke:"#555","stroke-width":2
+    });
+
+    add(svgWalker,"text",{
+      x:300,y:58,fill:"#2563eb",
+      "font-size":21,"font-family":"Arial"
+    }).textContent="accumulated hip path";
+
+    add(svgWalker,"text",{
+      x:wx(contactX),y:wy(-0.28),
+      "text-anchor":"middle","font-size":18,"font-family":"Arial"
+    }).textContent="stance foot";
+
+    const mx=(wx(H.x)+wx(Fsw.x))/2;
+    const my=(wy(H.y)+wy(Fsw.y))/2;
+    add(svgWalker,"text",{
+      x:500,y:155,"font-size":21,"font-family":"Arial"
+    }).textContent="swing leg";
+    add(svgWalker,"line",{
+      x1:488,y1:160,x2:mx+6,y2:my,
+      stroke:"#111","stroke-width":2.5,
+      "marker-end":"url(#blackWalker)"
+    });
+  }
+
+  function redraw(){
+    phaseVal.textContent=u.toFixed(3);
+    phaseSlider.value=Math.round((u/totalSteps)*1000);
+    drawWheel();
+    drawWalker();
+  }
+
+  function animate(ts){
+    if(!playing) return;
+    if(lastT===null) lastT=ts;
+    const dt=(ts-lastT)/1000;
+    lastT=ts;
+    u+=playbackSpeed*dt;
+
+    if(u>=totalSteps){
+      u=totalSteps;
+      playing=false;
+      playBtn.textContent="Play";
+    }
+
+    redraw();
+    if(playing) requestAnimationFrame(animate);
+  }
+
+  playBtn.addEventListener("click",()=>{
+    playing=!playing;
+    playBtn.textContent=playing?"Pause":"Play";
+    lastT=null;
+    if(playing){
+      if(u>=totalSteps) u=0;
+      requestAnimationFrame(animate);
+    }
+  });
+
+  resetBtn.addEventListener("click",()=>{
+    playing=false;
+    playBtn.textContent="Play";
+    u=0;
+    lastT=null;
+    redraw();
+  });
+
+  phaseSlider.addEventListener("input",()=>{
+    playing=false;
+    playBtn.textContent="Play";
+    u=totalSteps*(parseInt(phaseSlider.value,10)/1000);
+    redraw();
+  });
+
+  redraw();
+})();
+</script>
+</body>
+</html>

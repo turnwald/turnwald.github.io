@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RRT* – Interaktive Pfadplanung</title>
+<style>
+:root{--bg:#f5f7fa;--ink:#243348;--muted:#6a788b;--border:#dce3ed;--blue:#3575bb;--orange:#f59e0b;--green:#0da76c;--red:#e54848}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+main{max-width:1440px;margin:auto;padding:14px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.brand{font-weight:750;font-size:20px;margin-right:auto}
+button{border:1px solid #cfd9e5;background:#fff;border-radius:9px;padding:9px 12px;min-height:40px;color:var(--ink);font:inherit;cursor:pointer}
+button:hover:not(:disabled){background:#e9f2fd}
+button:disabled{opacity:.35;cursor:default}
+button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+button.primary:hover{background:#174dc0}
+button.active{background:#e7f0ff;border-color:#74a5dc}
+.layout{display:grid;grid-template-columns:minmax(500px,1.15fr) minmax(390px,.85fr);gap:12px}
+.panel{border:1px solid var(--border);border-radius:12px;background:#fff;overflow:hidden}
+.plotPanel{padding:10px;display:flex;justify-content:center;align-items:center;min-height:520px}
+svg{width:100%;height:auto;display:block;max-height:calc(100vh - 115px);touch-action:manipulation;cursor:crosshair}
+.side{display:flex;flex-direction:column;gap:10px;padding:14px;min-width:0}
+.heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.heading strong{font-size:17px}
+.muted,.detail{color:var(--muted);font-size:12px}
+.stepbar{display:flex;flex-wrap:wrap;gap:4px}
+.stepbar span{font-size:11px;border:1px solid #e0e6ee;border-radius:6px;color:#697c91;padding:5px 7px}
+.stepbar span.on{border-color:#95b7ea;background:#e8f1ff;color:#19559d;font-weight:700}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:#637386;font-size:12px}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.swatch{width:11px;height:11px;display:inline-block;border-radius:3px}
+.tableTitle{display:flex;justify-content:space-between;font-size:13px;color:#465872;font-weight:650}
+.scroller{border:1px solid #e0e6ed;border-radius:8px;overflow:auto;min-height:270px;max-height:61vh}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap}
+th,td{padding:9px 8px;text-align:right;border-bottom:1px solid #edf0f4}
+th:first-child,td:first-child{text-align:left}
+th{background:#eef3f9;position:sticky;top:0;z-index:1}
+tr.selected{background:#e4f2fd}
+tr.rewired{background:#dcfce7}
+tr:hover{background:#f5f8fc}
+.foot{display:flex;gap:10px;justify-content:space-between;font-size:12px;color:#64748b;flex-wrap:wrap}
+.note{color:#64748b;font-size:12px;line-height:1.45}
+@media(max-width:930px){.layout{grid-template-columns:1fr}.plotPanel{min-height:320px}svg{max-height:68vh}.scroller{max-height:40vh;min-height:210px}}
+</style>
+</head>
+<body><main>
+<div class="toolbar">
+ <div class="brand">RRT*</div>
+ <button id="reset" title="Neustart">↻</button>
+ <button id="prev" title="Zurück">◀</button>
+ <button id="next" class="primary" title="Nächster Teilschritt">▶</button>
+ <button id="auto" title="Automatischer Ablauf">▷▷ Auto</button>
+ <button id="skip" title="Bis zum nächsten tatsächlichen Rewiring vorspulen">↝ Rewiring zeigen</button>
+</div>
+<div class="layout">
+ <section class="panel plotPanel"><svg id="plot" viewBox="0 0 900 630" aria-label="Kontinuierlicher zweidimensionaler RRT-Stern-Baum, interaktiv" role="img"></svg></section>
+ <section class="panel side">
+  <div class="heading"><strong id="headline">Start</strong><span id="counter" class="muted"></span></div>
+  <div class="stepbar" id="stepbar"></div>
+  <div class="legend">
+   <span><i class="swatch" style="background:#3575bb"></i> Baum</span>
+   <span><i class="swatch" style="background:#f59e0b"></i> Sample / Near</span>
+   <span><i class="swatch" style="background:#0da76c"></i> Parent / Pfad</span>
+   <span><i class="swatch" style="background:#e54848"></i> Rewiring</span>
+  </div>
+  <div class="tableTitle"><span id="tableTitle">Baum</span><span id="tableHint" class="muted"></span></div>
+  <div class="scroller"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <div class="foot"><span id="summary"></span><span id="status"></span></div>
+  <div class="note">In die Grafik klicken, um den nächsten Sample-Punkt selbst festzulegen. Ohne Klick werden Samples zufällig erzeugt. Ein Klick auf ▶ führt genau einen Algorithmus-Teilschritt aus.</div>
+ </section>
+</div></main>
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id),svg=$("plot");
+const NS="http://www.w3.org/2000/svg", deep=x=>JSON.parse(JSON.stringify(x));
+const W=900,H=630, domain={xmin:0,xmax:9,ymin:0,ymax:6};
+const PARAM={
+  step:0.68,
+  radius:1.47,
+  goalBias:.075,
+  start:{x:.65,y:.75}, goal:{x:8.25,y:5.23},
+  obstacles:[
+    {x:2.4,y:1.4,w:.77,h:3.32},
+    {x:4.34,y:0,w:.74,h:3.65},
+    {x:6.07,y:2.8,w:.72,h:3.02}
+  ]
+};
+const steps=["Sample","Nearest / Steer","Near","Choose-Parent","Rewire"];
+let history=[],cursor=0,timer=null, pendingSample=null;
+
+const EPS=1e-9;
+const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const node=(s,id)=>s.nodes.find(n=>n.id===id);
+const f=v=>v===null||v===undefined?"–":Math.abs(v)<EPS?"0":Number(v).toFixed(2);
+const nm=id=>id===null||id===undefined?"–":"q"+id;
+function rand(s){s.seed=(Math.imul(s.seed,1664525)+1013904223)>>>0;return s.seed/4294967296;}
+function inside(p,r){return p.x>=r.x-EPS&&p.x<=r.x+r.w+EPS&&p.y>=r.y-EPS&&p.y<=r.y+r.h+EPS;}
+function hitsRect(a,b,r){
+  // Liang-Barsky; grazing an obstacle boundary counts as collision.
+  let low=0,high=1,dx=b.x-a.x,dy=b.y-a.y;
+  for(const [p,q] of [[-dx,a.x-r.x],[dx,r.x+r.w-a.x],[-dy,a.y-r.y],[dy,r.y+r.h-a.y]]){
+    if(Math.abs(p)<EPS){if(q<0)return false;}
+    else {const z=q/p;if(p<0)low=Math.max(low,z);else high=Math.min(high,z);if(low>high+EPS)return false;}
+  }
+  return true;
+}
+function collision(a,b){return PARAM.obstacles.some(o=>inside(a,o)||inside(b,o)||hitsRect(a,b,o));}
+function initial(){return {nodes:[{id:0,x:PARAM.start.x,y:PARAM.start.y,parent:null,J:0}],seed:37811,phase:0,iteration:0,nextId:1,sample:null,nearest:null,newP:null,near:[],rows:[],rewireRows:[],rewired:[],parent:null,rejected:false,reason:""};}
+function sample(s){
+  if(pendingSample){const p=deep(pendingSample);pendingSample=null;return p;}
+  if(rand(s)<PARAM.goalBias)return deep(PARAM.goal);
+  return {x:.12+rand(s)*(domain.xmax-.24),y:.12+rand(s)*(domain.ymax-.24)};
+}
+function nearest(s,p){return s.nodes.reduce((best,n)=>!best||d(n,p)<d(best,p)-EPS||(Math.abs(d(n,p)-d(best,p))<EPS&&n.id<best.id)?n:best,null);}
+function steer(a,b){let dist=d(a,b);if(dist<EPS)return {x:a.x,y:a.y};let t=Math.min(1,PARAM.step/dist);return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};}
+function isAncestor(s,ancestor,descendant){
+  let n=node(s,descendant);
+  while(n){if(n.id===ancestor)return true;n=n.parent===null?null:node(s,n.parent);}
+  return false;
+}
+function updateSubtree(s,id){
+  const v=node(s,id),p=node(s,v.parent);
+  v.J=p.J+d(p,v);
+  for(const child of s.nodes.filter(n=>n.parent===v.id))updateSubtree(s,child.id);
+}
+function nextState(old){
+  let s=deep(old);
+  if(s.phase===0||s.phase===5){
+    s.phase=1;s.iteration++;s.sample=sample(s);s.nearest=null;s.newP=null;s.near=[];s.rows=[];s.rewireRows=[];s.rewired=[];s.parent=null;s.rejected=false;s.reason="";
+  }else if(s.phase===1){
+    s.phase=2;
+    const nn=nearest(s,s.sample);
+    s.nearest=nn.id;s.newP=steer(nn,s.sample);
+    if(d(nn,s.newP)<EPS){s.rejected=true;s.reason="Sample liegt bereits auf einem Knoten";}
+    else if(collision(nn,s.newP)){s.rejected=true;s.reason="Steer kollidiert mit Hindernis";}
+  }else if(s.phase===2){
+    s.phase=3;
+    if(!s.rejected){
+      s.near=s.nodes.filter(n=>d(n,s.newP)<=PARAM.radius+EPS&&!collision(n,s.newP)).map(n=>n.id).sort((a,b)=>a-b);
+      const cand=s.near.slice();
+      if(!cand.includes(s.nearest))cand.push(s.nearest); // nearest is a collision-free fallback
+      cand.sort((a,b)=>a-b);
+      s.rows=cand.map(id=>{const n=node(s,id);return {id,oldJ:n.J,length:d(n,s.newP),candidate:n.J+d(n,s.newP),selected:false};});
+    }
+  }else if(s.phase===3){
+    s.phase=4;
+    if(!s.rejected){
+      const best=s.rows.reduce((a,b)=>!a||b.candidate<a.candidate-EPS||(Math.abs(b.candidate-a.candidate)<EPS&&b.id<a.id)?b:a,null);
+      if(best){
+        s.parent=best.id;
+        s.rows.forEach(r=>r.selected=r.id===best.id);
+        s.nodes.push({id:s.nextId++,x:s.newP.x,y:s.newP.y,parent:best.id,J:best.candidate});
+      }else{s.rejected=true;s.reason="Keine kollisionsfreie Verbindung";}
+    }
+  }else if(s.phase===4){
+    s.phase=5;
+    if(!s.rejected){
+      const q=node(s,s.nextId-1);
+      // Snapshot old costs before changing any parents; update changes afterwards.
+      s.rewireRows=s.near.filter(id=>id!==q.parent).map(id=>{
+        const v=node(s,id),candidate=q.J+d(q,v);
+        return {id,oldParent:v.parent,oldJ:v.J,candidate,rewire:id!==0&&!isAncestor(s,id,q.id)&&candidate<v.J-EPS};
+      });
+      for(const r of s.rewireRows){
+        if(!r.rewire)continue;
+        // Recheck current costs because an earlier rewire may have improved descendants.
+        const v=node(s,r.id);
+        if(v.id!==0&&!isAncestor(s,v.id,q.id)&&q.J+d(q,v)<v.J-EPS&&!collision(q,v)){
+          v.parent=q.id;updateSubtree(s,v.id);s.rewired.push(v.id);
+        }else r.rewire=false;
+      }
+    }
+  }
+  return s;
+}
+function bestGoal(s){
+  let best=null;
+  for(const n of s.nodes){
+    const dd=d(n,PARAM.goal);
+    if(dd>PARAM.step+EPS||collision(n,PARAM.goal))continue;
+    const J=n.J+dd;
+    if(!best||J<best.J-EPS)best={n:n.id,J};
+  }
+  return best;
+}
+function E(tag,attrs={},parent=svg){
+  const v=document.createElementNS(NS,tag);
+  for(const [key,val] of Object.entries(attrs))v.setAttribute(key,String(val));
+  parent.appendChild(v);return v;
+}
+function TXT(t,attrs={}){const v=E("text",{"font-family":"system-ui,Arial,sans-serif",...attrs});v.textContent=t;return v;}
+const outer={l:35,r:35,t:35,b:35};
+const scale=Math.min((W-outer.l-outer.r)/(domain.xmax-domain.xmin),(H-outer.t-outer.b)/(domain.ymax-domain.ymin));
+const tx=outer.l+((W-outer.l-outer.r)-(domain.xmax-domain.xmin)*scale)/2;
+const ty=outer.t+((H-outer.t-outer.b)-(domain.ymax-domain.ymin)*scale)/2;
+const P=p=>({x:tx+(p.x-domain.xmin)*scale,y:ty+(domain.ymax-p.y)*scale});
+function L(a,b,props={}){const x=P(a),y=P(b);return E("line",{x1:x.x,y1:x.y,x2:y.x,y2:y.y,...props});}
+function dot(p,r,fill,stroke="#fff",sw=1.8){const a=P(p);return E("circle",{cx:a.x,cy:a.y,r,fill,stroke,"stroke-width":sw});}
+function draw(){
+ const s=history[cursor];svg.replaceChildren();
+ E("rect",{x:tx,y:ty,width:9*scale,height:6*scale,fill:"#fcfdff",stroke:"#cbd5e1","stroke-width":1.6});
+ for(const o of PARAM.obstacles){
+   const c=P({x:o.x,y:o.y+o.h});
+   E("rect",{x:c.x,y:c.y,width:o.w*scale,height:o.h*scale,fill:"#aeb7c4",stroke:"#7e8b9c","stroke-width":1,rx:4});
+ }
+ const g=P(PARAM.goal);E("circle",{cx:g.x,cy:g.y,r:13,fill:"#effff4",stroke:"#11a169","stroke-width":2});
+ TXT("★",{x:g.x,y:g.y+6,"text-anchor":"middle","font-size":21,fill:"#149666"});
+ const best=bestGoal(s);
+ if(best){
+   let chain=[PARAM.goal],v=node(s,best.n);let guard=0;
+   while(v&&guard++<=s.nodes.length){chain.push(v);v=v.parent===null?null:node(s,v.parent);}
+   for(let i=1;i<chain.length;i++)L(chain[i-1],chain[i],{stroke:"#18a375","stroke-width":5,"stroke-linecap":"round"});
+ }
+ // Current rewiring old edges: show dashed red lines after changes as comparison.
+ if(s.phase===5)for(const r of s.rewireRows.filter(r=>s.rewired.includes(r.id))){
+   const oldParent=node(s,r.oldParent),changed=node(s,r.id);
+   if(oldParent)L(oldParent,changed,{stroke:"#e54848","stroke-width":2.4,"stroke-dasharray":"6 5",opacity:.85});
+ }
+ for(const n of s.nodes){
+   if(n.parent===null)continue;
+   const parent=node(s,n.parent);
+   L(n,parent,{stroke:s.phase===5&&s.rewired.includes(n.id)?"#e54848":"#4381c2","stroke-width":s.phase===5&&s.rewired.includes(n.id)?4.4:2.1,"stroke-linecap":"round"});
+ }
+ if(s.phase>=3&&!s.rejected&&s.newP){
+   const pp=P(s.newP);
+   E("circle",{cx:pp.x,cy:pp.y,r:PARAM.radius*scale,fill:"#f59e0b","fill-opacity":.035,stroke:"#e9a62e","stroke-width":1.8,"stroke-dasharray":"6 5"});
+   for(const id of s.near)L(node(s,id),s.newP,{stroke:"#e4a43c","stroke-width":1.3,"stroke-dasharray":"4 4",opacity:.7});
+ }
+ if(s.phase>=2&&s.phase<=3&&s.newP&&s.nearest!==null)
+   L(node(s,s.nearest),s.newP,{stroke:"#e89c15","stroke-width":3,"stroke-dasharray":"6 4"});
+ if(s.phase>=4&&!s.rejected&&s.parent!==null)
+   L(node(s,s.parent),s.newP,{stroke:"#0da76c","stroke-width":4.5});
+ if(s.sample){
+   const p=P(s.sample);E("circle",{cx:p.x,cy:p.y,r:8,fill:"#fff",stroke:s.rejected?"#ef4444":"#f59e0b","stroke-width":2.5});
+   E("line",{x1:p.x-11,y1:p.y,x2:p.x+11,y2:p.y,stroke:"#f59e0b","stroke-width":1.3});
+   E("line",{x1:p.x,y1:p.y-11,x2:p.x,y2:p.y+11,stroke:"#f59e0b","stroke-width":1.3});
+ }
+ if(s.phase>=2&&s.newP&&!s.rejected)dot(s.newP,6.5,"#fed978","#d59714",2);
+ for(const n of s.nodes){
+   const near=s.near.includes(n.id)&&s.phase>=3&&s.phase<=4;
+   const rewired=s.phase===5&&s.rewired.includes(n.id);
+   dot(n,n.id===0?8:6,n.id===0?"#184c83":rewired?"#e54848":near?"#f6bb42":"#3575bb");
+ }
+ if(s.phase>=4&&!s.rejected){
+   const n=node(s,s.nextId-1),p=P(n);
+   TXT(nm(n.id),{x:p.x+9,y:p.y-10,"font-size":13,fill:"#354961","font-weight":650});
+ }
+ if(pendingSample&&(s.phase===0||s.phase===5)){
+   const p=P(pendingSample);E("circle",{cx:p.x,cy:p.y,r:9,fill:"#fff9e7",stroke:"#e59b11","stroke-width":3,"stroke-dasharray":"3 3"});
+ }
+}
+function table(head,rows,highlight=[]){
+ const h=$("thead"),b=$("tbody");h.replaceChildren();b.replaceChildren();
+ const tr=document.createElement("tr");
+ for(const v of head){let th=document.createElement("th");th.textContent=v;tr.appendChild(th);}
+ h.appendChild(tr);
+ for(let i=0;i<rows.length;i++){
+   const row=document.createElement("tr");row.className=highlight[i]||"";
+   for(const v of rows[i]){const td=document.createElement("td");td.textContent=String(v);row.appendChild(td);}
+   b.appendChild(row);
+ }
+}
+function updateTable(s){
+ if((s.phase===3||s.phase===4)&&!s.rejected){
+   $("tableTitle").textContent="Choose-Parent";
+   $("tableHint").textContent="min J(parent) + Distanz";
+   table(["Kandidat","J(parent)","Distanz","J neu",""],s.rows.map(r=>[nm(r.id),f(r.oldJ),f(r.length),f(r.candidate),r.selected?"✓":""]),s.rows.map(r=>r.selected?"selected":""));
+ }else if(s.phase===5&&!s.rejected){
+   $("tableTitle").textContent="Rewiring";
+   $("tableHint").textContent="nur kollisionsfreie Near-Knoten";
+   table(["Knoten","Parent alt","J alt","J via neu",""],s.rewireRows.map(r=>[nm(r.id),nm(r.oldParent),f(r.oldJ),f(r.candidate),s.rewired.includes(r.id)?"✓":"–"]),s.rewireRows.map(r=>s.rewired.includes(r.id)?"rewired":""));
+ }else{
+   $("tableTitle").textContent="Aktueller Baum";
+   $("tableHint").textContent="letzte 16 Knoten";
+   table(["Knoten","(x, y)","Parent","J"],s.nodes.slice(-16).reverse().map(n=>[nm(n.id),`(${f(n.x)}, ${f(n.y)})`,nm(n.parent),f(n.J)]));
+ }
+}
+function render(){
+ const s=history[cursor];draw();updateTable(s);
+ $("headline").textContent=s.phase===0?"Start":`Iteration ${s.iteration} · ${steps[s.phase-1]}`;
+ $("counter").textContent=`${s.nodes.length} Knoten`;
+ $("stepbar").replaceChildren();
+ steps.forEach((v,i)=>{const el=document.createElement("span");el.textContent=v;el.className=(s.phase===i+1)?"on":"";$("stepbar").appendChild(el);});
+ const goal=bestGoal(s);
+ $("summary").textContent=s.phase===5?`Rewiring: ${s.rewired.length? s.rewired.map(nm).join(", "):"keines"}`:s.phase===4&&s.parent!==null?`Parent ${nm(s.parent)}, J=${f(node(s,s.nextId-1).J)}`:`Near: ${s.near.length} · Schritt ${cursor}`;
+ $("status").textContent=s.rejected?s.reason:(goal?`Pfadkosten zum Ziel: ${f(goal.J)}`:"Ziel noch nicht erreicht");
+ $("prev").disabled=cursor===0;
+}
+function stop(){
+ if(timer){clearInterval(timer);timer=null;}
+ $("auto").classList.remove("active");$("auto").textContent="▷▷ Auto";
+}
+function step(){
+ if(cursor<history.length-1){cursor++;render();return;}
+ history.push(nextState(history[cursor]));cursor++;render();
+}
+function reset(){
+ stop();pendingSample=null;history=[initial()];cursor=0;render();
+}
+$("reset").addEventListener("click",reset);
+$("next").addEventListener("click",()=>{stop();step();});
+$("prev").addEventListener("click",()=>{stop();if(cursor>0){cursor--;render();}});
+$("auto").addEventListener("click",()=>{
+ if(timer){stop();return;}
+ timer=setInterval(()=>{step();},450);
+ $("auto").classList.add("active");$("auto").textContent="Ⅱ Pause";
+});
+$("skip").addEventListener("click",()=>{
+ stop();let iters=0,starting=history[cursor].iteration;
+ while(iters<1600){
+   step();iters++;
+   const s=history[cursor];
+   if(s.phase===5&&s.rewired.length>0&&s.iteration>=starting)break;
+ }
+});
+svg.addEventListener("click",ev=>{
+ const s=history[cursor];if(s.phase!==0&&s.phase!==5)return;
+ const rect=svg.getBoundingClientRect();
+ const px=(ev.clientX-rect.left)*W/rect.width,py=(ev.clientY-rect.top)*H/rect.height;
+ const x=domain.xmin+(px-tx)/scale,y=domain.ymax-(py-ty)/scale;
+ const p={x,y};
+ if(x<=domain.xmin||x>=domain.xmax||y<=domain.ymin||y>=domain.ymax||PARAM.obstacles.some(o=>inside(p,o)))return;
+ stop();
+ history=history.slice(0,cursor+1);
+ pendingSample=p;render();
+});
+window.__rrtDebug=()=>({history:deep(history),state:deep(history[cursor]),cursor,params:deep(PARAM),pendingSample:deep(pendingSample)});
+reset();
+})();
+</script>
+</body></html>

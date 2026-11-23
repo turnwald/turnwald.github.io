@@ -16,6 +16,7 @@ npm run preview
 ## Add content
 
 - **Courses:** add an entry to `src/data/courses.js`, using the documented fields and a unique URL-safe slug. Each entry creates a course detail page. Links can point to teaching materials, demos or repositories.
+- **Course demonstrations:** maintain the source in the private teaching repository under `courses/<course>/lecture/interactive/`. Copy only approved public HTML snapshots to `public/labs/mobile-robots/` or `public/labs/aktorik/`, then add descriptive, language-labelled links to the corresponding course's `demos` in `src/data/courses.js`. Keep the source and public snapshots in sync when updating them.
 - **Labs:** add an entry to `src/data/labs.js`. For locally hosted applications put static files in `public/labs/<name>/` and link to `/labs/<name>/`; external URLs also work.
 - **Theses:** approved open snapshots and curated, anonymized status records are exported from the private teaching repository through its review workflow. `src/data/thesis-history.json` contains only approved public status records; non-available IDs suppress matching open pages. Do not copy internal records.
 

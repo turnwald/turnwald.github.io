@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synchronmaschine · Interaktives Zeigerdiagramm</title>
+<style>
+:root{color-scheme:light;--txt:#1d2632;--muted:#607080;--border:#d8e0e8;--surface:#f6f8fa;--blue:#174dcc;--red:#d62d32;--green:#148845;--gray:#788491;--accent:#263a58}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--txt);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+main{max-width:1160px;margin:auto;padding:22px 24px 32px}
+h1{margin:0;font-size:clamp(1.4rem,2.5vw,1.8rem);letter-spacing:-.03em;line-height:1.23}
+.lead{margin:5px 0 18px;color:var(--muted);font-size:.95rem}
+h2{font-size:1.08rem;margin:0 0 10px}
+.layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(290px,1fr);gap:16px;align-items:start}
+.card{border:1px solid var(--border);border-radius:12px;padding:16px;min-width:0;background:#fff}
+.stage-top{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
+.stage-top h2{margin:0}
+.mode-read{font-size:.85rem;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--surface);color:var(--accent)}
+.steps{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.steps button{flex:1 1 95px;border:1px solid var(--border);border-radius:7px;padding:7px 5px;font-size:.84rem;background:#fff;cursor:pointer;color:var(--muted)}
+.steps button.active{border-color:var(--accent);background:var(--accent);color:white;font-weight:600}
+.steps button:hover:not(.active),.preset:hover{background:var(--surface)}
+.step-desc{font-size:.88rem;color:var(--muted);min-height:1.45rem;margin:3px 0 6px}
+.graph-wrapper{overflow-x:auto;scrollbar-width:thin}
+#diagram{display:block;width:100%;min-width:535px;height:auto;overflow:visible}
+.arrow-label{font:italic 22px Georgia,"Times New Roman",serif;paint-order:stroke fill;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+.arc-label{font:italic 17px Georgia,"Times New Roman",serif;paint-order:stroke fill;stroke:#fff;stroke-width:4px}
+.axis-label{font:17px Georgia,serif;fill:#828c97}
+.legend{display:flex;gap:9px 15px;flex-wrap:wrap;font-size:.79rem;color:#536373;padding-top:4px}
+.legend i{display:inline-block;width:17px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.field{margin:0 0 22px}
+.field-name{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-weight:650;margin-bottom:7px}
+.output-number{font-weight:700;font-variant-numeric:tabular-nums;color:#17243d;white-space:nowrap}
+input[type=range]{width:100%;accent-color:#263a58;height:24px;cursor:pointer}
+.slider-extents{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;color:var(--muted);gap:6px}
+.slider-extents span:nth-child(2){text-align:center}
+.slider-extents span:last-child{text-align:right}
+.rule{padding:12px 13px;background:var(--surface);border-radius:8px;font-size:.87rem;color:#445367}
+.rule p{margin:0 0 4px}.rule p:last-child{margin:0}
+.rule strong{color:var(--txt)}
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.preset{border:1px solid var(--border);background:white;color:#243247;padding:7px 11px;border-radius:7px;font-size:.85rem;cursor:pointer}
+.counters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:15px}
+.counter{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px;min-width:0}
+.counter label{display:block;color:var(--muted);font-size:.78rem;margin-bottom:2px}
+.counter strong{font-size:1.1rem;font-weight:680;white-space:nowrap;font-variant-numeric:tabular-nums}
+.process{margin-top:15px}
+.process h2{margin:0 0 10px}
+.lines{display:grid;gap:8px}
+.line{padding:10px 12px;background:var(--surface);border-radius:8px;border-left:3px solid var(--border);line-height:1.5}
+.line[data-step="1"]{border-left-color:var(--red)}
+.line[data-step="2"]{border-left-color:var(--red)}
+.line[data-step="3"]{border-left-color:var(--gray)}
+.line[data-step="4"]{border-left-color:var(--green)}
+.eq{font:16px/1.6 Georgia,"Times New Roman",serif;overflow-wrap:anywhere}
+.dim{opacity:.35}
+.mode-line{margin-bottom:10px;font-size:.93rem}
+.formula-note{font-size:.86rem;color:var(--muted);margin-top:10px}
+.info{font-size:.86rem;line-height:1.55;color:var(--muted);margin-top:12px}
+.info p{margin:5px 0}
+.neutral-warn{font-size:.85rem;color:#905500;margin-top:8px;min-height:1.2rem}
+button:focus-visible,input:focus-visible{outline:3px solid #6ba1e8;outline-offset:2px}
+@media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.counters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){main{padding:14px}.card{padding:12px}.counters{grid-template-columns:repeat(2,minmax(0,1fr))}.counter strong{font-size:.99rem}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Synchronmaschine · Zeigerdiagramm</h1>
+  <p class="lead">Verändere die <strong>Wirkleistung</strong> und die <strong>Stromphase</strong>. Die Zeiger und die Rechenschritte werden direkt aktualisiert – wie in Übung und Klausur.</p>
+  <div class="layout">
+    <section class="card" aria-labelledby="chartTitle">
+      <div class="stage-top"><h2 id="chartTitle">Zeigerkonstruktion</h2><span class="mode-read" id="modeBadge">Generator · induktiv</span></div>
+      <div class="steps" id="steps" role="group" aria-label="Schritt der Zeigerkonstruktion">
+        <button type="button" data-step="1">1 · Bezug</button>
+        <button type="button" data-step="2">2 · +90°</button>
+        <button type="button" data-step="3">3 · Addition</button>
+        <button type="button" data-step="4" class="active">4 · Ergebnis</button>
+      </div>
+      <div id="stepDesc" class="step-desc">Alle Zeiger und der Polradwinkel δ.</div>
+      <div class="graph-wrapper">
+      <svg id="diagram" viewBox="0 0 840 525" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Komplexe Zeiger für Statorspannung, Strom, Reaktanzspannungsabfall und Polradspannung">
+        <defs>
+          <marker id="arrB" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#174dcc"/></marker>
+          <marker id="arrR" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#d62d32"/></marker>
+          <marker id="arrG" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#148845"/></marker>
+          <marker id="arrGray" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#788491"/></marker>
+        </defs>
+        <line x1="28" y1="285" x2="814" y2="285" stroke="#a0a9b5" stroke-width="1.35"/>
+        <path d="M815 285 l-10 -5 v10z" fill="#a0a9b5"/>
+        <line x1="245" y1="497" x2="245" y2="32" stroke="#a0a9b5" stroke-width="1.35"/>
+        <path d="M245 31 l-5 10 h10z" fill="#a0a9b5"/>
+        <text x="793" y="309" class="axis-label">Re</text>
+        <text x="217" y="27" class="axis-label">Im</text>
+        <circle cx="245" cy="285" r="2.5" fill="#7c8793"/>
+        <path id="phiArc" fill="none" stroke="#d62d32" stroke-width="2"/>
+        <text id="phiArcText" class="arc-label" fill="#d62d32">φ</text>
+        <path id="rotArc" fill="none" stroke="#d62d32" stroke-dasharray="3 4" stroke-width="1.4"/>
+        <text id="rotText" class="arc-label" fill="#d62d32">+90°</text>
+        <path id="deltaArc" fill="none" stroke="#148845" stroke-width="2"/>
+        <text id="deltaText" class="arc-label" fill="#148845">δ</text>
+        <line id="usVector" x1="245" y1="285" x2="444" y2="285" stroke="#174dcc" stroke-width="3.3" marker-end="url(#arrB)"/>
+        <text id="usText" class="arrow-label" fill="#174dcc">Uₛ</text>
+        <line id="iVector" stroke="#d62d32" stroke-width="3.1" marker-end="url(#arrR)"/>
+        <text id="iText" class="arrow-label" fill="#d62d32">Iₛ</text>
+        <line id="jFromOrigin" stroke="#d62d32" stroke-width="2.1" stroke-dasharray="7 5" opacity=".8" marker-end="url(#arrR)"/>
+        <text id="jFromOriginText" class="arrow-label" fill="#d62d32">jX_d Iₛ</text>
+        <line id="construction" stroke-width="3" marker-end="url(#arrR)"/>
+        <text id="constructionText" class="arrow-label">jX_d Iₛ</text>
+        <line id="upVector" stroke="#148845" stroke-width="3.5" marker-end="url(#arrG)"/>
+        <text id="upText" class="arrow-label" fill="#148845">Uₚ</text>
+        <circle id="upTip" r="3" fill="#148845"/>
+        <text x="22" y="514" font-size="14" fill="#74808e" id="axisNote">Spannungen maßstäblich, Iₛ separat skaliert</text>
+      </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--blue)"></i>U<sub>s</sub> fest</span>
+        <span><i style="background:var(--red)"></i>I<sub>s</sub>, jX<sub>d</sub>I<sub>s</sub></span>
+        <span><i style="background:var(--gray)"></i>−jX<sub>d</sub>I<sub>s</sub> beim Motor</span>
+        <span><i style="background:var(--green)"></i>U<sub>p</sub></span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="inputsTitle">
+      <h2 id="inputsTitle">Vorgaben</h2>
+      <div class="field">
+        <div class="field-name"><label for="power">Wirkleistung P</label><span id="pRead" class="output-number">−4,0 kW</span></div>
+        <input id="power" type="range" min="-6" max="6" step="0.1" value="-4" aria-describedby="pDesc">
+        <div id="pDesc" class="slider-extents"><span>−6 kW · Generator</span><span>0</span><span>+6 kW · Motor</span></div>
+      </div>
+      <div class="field">
+        <div class="field-name"><label for="angle">Stromphase φ</label><span id="phiRead" class="output-number">−36,87°</span></div>
+        <input id="angle" type="range" min="-50" max="50" step="0.01" value="-36.87" aria-describedby="phiDesc">
+        <div id="phiDesc" class="slider-extents"><span>−50° · induktiv</span><span>0° · cos φ = 1</span><span>+50° · kapazitiv</span></div>
+        <div class="formula-note">Daraus: <span id="cosRead">cos φ = 0,800</span> · <span id="phaseStatus">Strom nacheilend</span></div>
+      </div>
+      <div class="rule">
+        <p><strong>Fest:</strong> U<sub>s</sub> = 400/√3 V ≈ 230,94 V, ∠U<sub>s</sub> = 0°</p>
+        <p>X<sub>d</sub> = 20 Ω, R<sub>s</sub> ≈ 0 · dreiphasig, symmetrisch</p>
+      </div>
+      <div class="presets" aria-label="Ausgangswerte aus der Übung">
+        <button type="button" class="preset" id="presetMotor">Übung 4 · Motor</button>
+        <button type="button" class="preset" id="presetGenerator">Übung 5 · Generator</button>
+      </div>
+      <p class="info">Das Vorzeichen von <b>P</b> bezeichnet hier die elektrische <em>Netzaufnahme</em>: positiv = Motor, negativ = Generator. Der Stromzeiger I<sub>s</sub> verwendet wie in den Übungen je nach Betriebsart die Stromrichtung <em>in die</em> bzw. <em>aus der Maschine</em>.</p>
+    </section>
+  </div>
+
+  <div class="counters" aria-live="polite">
+    <div class="counter"><label>Strangstrom I<sub>s</sub></label><strong id="resI">7,22 A</strong></div>
+    <div class="counter"><label>Leistungsfaktor</label><strong id="resCos">0,800</strong></div>
+    <div class="counter"><label>Polradspannung U<sub>p</sub></label><strong id="resU">—</strong></div>
+    <div class="counter"><label>Polradwinkel δ</label><strong id="resDelta">—</strong></div>
+  </div>
+
+  <section class="card process" aria-labelledby="calcTitle">
+    <h2 id="calcTitle">Rechenweg zum Zeigerdiagramm</h2>
+    <div id="modeEq" class="mode-line"></div>
+    <div class="lines">
+      <div class="line" data-step="1" id="eq1"></div>
+      <div class="line" data-step="2" id="eq2"></div>
+      <div class="line" data-step="3" id="eq3"></div>
+      <div class="line" data-step="4" id="eq4"></div>
+    </div>
+    <div class="neutral-warn" id="special"></div>
+  </section>
+
+  <div class="info">
+    <p><strong>Konvention:</strong> φ ist der Winkel des jeweiligen Stromzeigers relativ zu U<sub>s</sub>. Induktiv: φ &lt; 0, I<sub>s</sub> nacheilend; kapazitiv: φ &gt; 0, I<sub>s</sub> voreilend. δ = ∠U<sub>p</sub> − ∠U<sub>s</sub> ist vorzeichenbehaftet.</p>
+    <p><strong>Grenzfall:</strong> Bei P = 0 ergibt diese Parametrierung I<sub>s</sub> = 0 und U<sub>p</sub> = U<sub>s</sub>. Die Stromphase und damit cos φ sind bei Nullstrom <em>nicht definiert</em>. Eine rein reaktive Stromaufnahme oder -abgabe bei P = 0 ist durch diese beiden Regler bewusst nicht abgebildet.</p>
+  </div>
+</main>
+<script>
+'use strict';
+(() => {
+  const root = document.querySelector('main');
+  if (root.dataset.initialized) return;
+  root.dataset.initialized = '1';
+  const get = id => document.getElementById(id);
+  const power = get('power'), angle = get('angle');
+  const Us = 400 / Math.sqrt(3);
+  const Xd = 20;
+  const ox = 245, oy = 285, voltScale = .86, ampScale = 8;
+  let step = 4;
+  const F = (x,n=2) => (Math.abs(x)<Math.pow(10,-n)/2 ? 0 : x).toLocaleString('de-DE',{minimumFractionDigits:n,maximumFractionDigits:n});
+  const sF = (x,n=2) => (x>=0 ? '+' : '−') + F(Math.abs(x),n);
+  const complex = z => F(z.re) + ' ' + (z.im < 0 ? '−' : '+') + ' j' + F(Math.abs(z.im));
+  const p2 = v => ({x:ox + voltScale*v.re,y:oy - voltScale*v.im});
+  const va = (a,b) => ({re:a.re+b.re,im:a.im+b.im});
+  const vs = (a,b) => ({re:a.re-b.re,im:a.im-b.im});
+  const from = (amp,theta) => ({re:amp*Math.cos(theta),im:amp*Math.sin(theta)});
+  const jmul = z => ({re:-Xd*z.im,im:Xd*z.re});
+  const line = (id,a,b) => {
+    const el=get(id);el.setAttribute('x1',a.x);el.setAttribute('y1',a.y);
+    el.setAttribute('x2',b.x);el.setAttribute('y2',b.y);
+  };
+  const label=(id,x,y)=>{const el=get(id);el.setAttribute('x',x);el.setAttribute('y',y);};
+  const show=(id,on)=>get(id).style.display=on?'':'none';
+  function arcp(cx,cy,r,a,b){
+    const start=[cx+r*Math.cos(a),cy-r*Math.sin(a)];
+    const end=[cx+r*Math.cos(b),cy-r*Math.sin(b)];
+    return `M${start[0].toFixed(2)} ${start[1].toFixed(2)} A${r} ${r} 0 ${Math.abs(b-a)>Math.PI?1:0} ${b>a?0:1} ${end[0].toFixed(2)} ${end[1].toFixed(2)}`;
+  }
+  function arcl(id,a,b,r,dist){
+    get(id).setAttribute('d',arcp(ox,oy,r,a,b));
+    const mid=(a+b)/2;
+    return [ox+dist*Math.cos(mid),oy-dist*Math.sin(mid)];
+  }
+  const deg = a=>a*180/Math.PI;
+  function update(){
+    const signedP=Math.round(Number(power.value)*10)/10;
+    const phDeg=Number(angle.value), theta=phDeg*Math.PI/180;
+    const cosphi=Math.cos(theta);
+    const zero=Math.abs(signedP)<1e-9;
+    const generator=signedP<0, motor=signedP>0;
+    const mode=generator?'Generator':motor?'Motor':'Leerlauf';
+    const kind=zero?'ohne Strom':phDeg<-.001?'induktiv':phDeg>.001?'kapazitiv':'cos φ = 1';
+    const Iabs=Math.abs(signedP)*1000/(3*Us*cosphi);
+    const I=from(Iabs,theta);
+    const jXI=jmul(I);
+    const polarity=generator?1:-1;
+    const U={re:Us,im:0};
+    const Up=generator?va(U,jXI):vs(U,jXI);
+    const absUp=Math.hypot(Up.re,Up.im);
+    const delta=Math.atan2(Up.im,Up.re);
+    const upPt=p2(Up), usPt=p2(U), oi={x:ox,y:oy};
+    const iPt={x:ox+ampScale*I.re,y:oy-ampScale*I.im};
+    const jOriginPt=p2(jXI);
+    const added={re:polarity*jXI.re,im:polarity*jXI.im};
+    const addedEnd={x:usPt.x+voltScale*added.re,y:usPt.y-voltScale*added.im};
+
+    // Input labels and status.
+    get('pRead').textContent=(signedP>0?'+':signedP<0?'−':'')+F(Math.abs(signedP),1)+' kW';
+    get('phiRead').textContent=sF(phDeg)+'°';
+    get('modeBadge').textContent=mode+' · '+kind;
+    get('cosRead').textContent=zero?'cos φ = nicht definiert':'cos φ = '+F(cosphi,3);
+    get('phaseStatus').textContent=zero?'Iₛ = 0':phDeg<-.001?'Iₛ nacheilend':phDeg>.001?'Iₛ voreilend':'Iₛ und Uₛ phasengleich';
+
+    // SVG: reference vector and current.
+    line('usVector',oi,usPt); label('usText',usPt.x+10,usPt.y+27);
+    line('iVector',oi,iPt);
+    label('iText',iPt.x+10,iPt.y+(I.im>0?-12:23));
+    show('iVector',!zero);show('iText',!zero);
+
+    // phi and current-to-reactance quarter-turn.
+    if(!zero && Math.abs(theta)>.012){
+      const mid=arcl('phiArc',0,theta,53,75);
+      label('phiArcText',mid[0]+3,mid[1]+4);
+      show('phiArc',true);show('phiArcText',true);
+    }else{show('phiArc',false);show('phiArcText',false);}
+    line('jFromOrigin',oi,jOriginPt);
+    const ghostDx=jOriginPt.x-ox,ghostDy=jOriginPt.y-oy;
+    label('jFromOriginText',Math.max(11,jOriginPt.x+(ghostDx<0?-78:10)),jOriginPt.y-11);
+    const endAngle=theta+Math.PI/2;
+    const ninetyp=arcl('rotArc',theta,endAngle,95,116);
+    label('rotText',ninetyp[0]-15,ninetyp[1]+5);
+    show('jFromOrigin',step>=2 && !zero); show('jFromOriginText',step>=2 && !zero);
+    show('rotArc',step>=2 && !zero);show('rotText',step>=2 && !zero);
+
+    // Motor uses the inverse of jX_d I_s at the tip of U_s.
+    line('construction',usPt,addedEnd);
+    const construction=get('construction'),constructionText=get('constructionText');
+    construction.setAttribute('stroke',generator?'#d62d32':'#788491');
+    construction.setAttribute('marker-end',generator?'url(#arrR)':'url(#arrGray)');
+    if(motor){construction.setAttribute('stroke-dasharray','7 5');constructionText.setAttribute('fill','#788491');constructionText.textContent='−jX_d Iₛ';}
+    else{construction.removeAttribute('stroke-dasharray');constructionText.setAttribute('fill','#d62d32');constructionText.textContent='jX_d Iₛ';}
+    const mdx=addedEnd.x-usPt.x,mdy=addedEnd.y-usPt.y;
+    const side=mdx<0?-25:10;
+    label('constructionText',(usPt.x+addedEnd.x)/2+side,(usPt.y+addedEnd.y)/2+(mdy<0?-12:24));
+    show('construction',step>=3 && !zero);show('constructionText',step>=3 && !zero);
+
+    // The result phasor and signed pole angle.
+    line('upVector',oi,upPt);
+    label('upText',upPt.x+10,upPt.y+(Up.im>0?-13:23));
+    get('upTip').setAttribute('cx',upPt.x);get('upTip').setAttribute('cy',upPt.y);
+    show('upVector',step>=4); show('upText',step>=4);show('upTip',step>=4 && !zero);
+    if(!zero && Math.abs(delta)>.01){
+      const pt=arcl('deltaArc',0,delta,143,168);
+      label('deltaText',pt[0],pt[1]+5);
+      show('deltaArc',step>=4);show('deltaText',step>=4);
+    }else{show('deltaArc',false);show('deltaText',false);}
+    get('axisNote').textContent='Uₛ, jX_d Iₛ, Uₚ: gleicher Maßstab  ·  Iₛ: separat skaliert';
+
+    get('resI').textContent=F(Iabs)+' A';
+    get('resCos').textContent=zero?'—':F(cosphi,3);
+    get('resU').textContent=step>=4?F(absUp)+' V':'—';
+    get('resDelta').textContent=step>=4?(zero?'0,00°':sF(deg(delta))+'°'):'—';
+    get('modeEq').innerHTML=zero
+      ? '<b>P = 0:</b> I<sub>s</sub> = 0; U⃗<sub>p</sub> = U⃗<sub>s</sub>.'
+      : generator
+        ? '<b>Generatorbetrieb:</b> U⃗<sub>p</sub> = U⃗<sub>s</sub> + jX<sub>d</sub>I⃗<sub>s</sub> (Strom positiv aus der Maschine).'
+        : '<b>Motorbetrieb:</b> U⃗<sub>p</sub> = U⃗<sub>s</sub> − jX<sub>d</sub>I⃗<sub>s</sub> (Strom positiv in die Maschine).';
+    const angleSuffix=zero?'nicht definiert':sF(phDeg)+'°';
+    get('eq1').innerHTML=`<span class="eq"><b>1.</b> U⃗<sub>s</sub> = ${F(Us)} + j0 V; &nbsp; I<sub>s</sub> = |P|/(3U<sub>s</sub> cos φ) = <b>${F(Iabs)} A</b>; &nbsp; I⃗<sub>s</sub> = (${complex(I)}) A; &nbsp; ∠I⃗<sub>s</sub> = ${angleSuffix}</span>`;
+    get('eq2').innerHTML=`<span class="eq"><b>2.</b> jX<sub>d</sub>I⃗<sub>s</sub> = <b>(${complex(jXI)}) V</b> &nbsp; (um +90° gegenüber I⃗<sub>s</sub> gedreht)</span>`;
+    const upOp=generator?'+':motor?'−':'±';
+    get('eq3').innerHTML=`<span class="eq"><b>3.</b> U⃗<sub>p</sub> = U⃗<sub>s</sub> ${upOp} jX<sub>d</sub>I⃗<sub>s</sub> = <b>(${complex(Up)}) V</b></span>`;
+    get('eq4').innerHTML=`<span class="eq"><b>4.</b> U<sub>p</sub> = |U⃗<sub>p</sub>| = <b>${F(absUp)} V</b>; &nbsp; δ = ∠U⃗<sub>p</sub> − ∠U⃗<sub>s</sub> = <b>${sF(deg(delta))}°</b></span>`;
+    document.querySelectorAll('.line').forEach(el=>el.style.display=Number(el.dataset.step)<=step?'':'none');
+    get('special').textContent=zero?'Bei P = 0 hat der Stromzeiger keine Richtung; φ und cos φ sind nicht definiert.':Math.abs(deg(delta))>=90?'Warnung: |δ| ≥ 90° – außerhalb des üblichen stabilen Bereichs.':'';
+    const descriptions={1:'Bezugszeiger Uₛ und Strom Iₛ aus P und cos φ.',2:'jX_d Iₛ entsteht durch +90°-Drehung von Iₛ.',3:generator?'Generator: +jX_d Iₛ an die Spitze von Uₛ verschieben.':motor?'Motor: −jX_d Iₛ an die Spitze von Uₛ verschieben.':'Bei P = 0 ist der Spannungsabfall null.',4:'Resultierender Zeiger Uₚ und Polradwinkel δ.'};
+    get('stepDesc').textContent=descriptions[step];
+    get('steps').querySelectorAll('button').forEach(btn=>{
+      const selected=Number(btn.dataset.step)===step;
+      btn.classList.toggle('active',selected);
+      btn.setAttribute('aria-pressed',selected?'true':'false');
+    });
+  }
+  get('steps').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-step]');if(!b)return;
+    step=Number(b.dataset.step);update();
+  });
+  power.addEventListener('input',update);
+  angle.addEventListener('input',update);
+  get('presetMotor').addEventListener('click',()=>{power.value=4;angle.value=-25.84;step=4;update();});
+  get('presetGenerator').addEventListener('click',()=>{power.value=-4;angle.value=-36.87;step=4;update();});
+  update();
+})();
+</script>
+</body>
+</html>

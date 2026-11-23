@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synchronmaschine · Leistung und Kennlinien</title>
+<style>
+:root{--ink:#1d2938;--muted:#637387;--line:#d9e2eb;--panel:#f5f7fa;--blue:#174dcc;--green:#168447;--red:#d22d39;--amber:#ae6b08;--axis:#8794a3}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+main{max-width:1190px;margin:auto;padding:22px 24px 30px}
+h1{font-size:clamp(1.35rem,2.5vw,1.8rem);margin:0 0 5px;letter-spacing:-.025em}
+h2{font-size:1.06rem;margin:0 0 5px}
+p{margin:5px 0}
+.lead{color:var(--muted);font-size:.93rem;margin-bottom:16px}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:15px}
+.card{padding:15px 16px;border:1px solid var(--line);border-radius:11px;min-width:0;background:#fff}
+.fieldhead{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:4px}
+.fieldhead label{font-weight:650}
+.value{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+input[type=range]{width:100%;accent-color:#263b59;height:28px;cursor:pointer}
+.extents{display:flex;justify-content:space-between;color:var(--muted);font-size:.77rem;gap:6px}
+.extents span:nth-child(2){text-align:center}
+.extents span:last-child{text-align:right}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.charthead{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.charthead .hint{font-size:.78rem;color:var(--muted)}
+.chartsub{color:var(--muted);font-size:.84rem;margin-bottom:8px}
+.chartsvg{display:block;width:100%;height:auto;overflow:visible}
+.tick{fill:#788799;font:12.5px system-ui,Arial,sans-serif}
+.axisname{fill:#506075;font:14px system-ui,Arial,sans-serif}
+.ctitle{fill:var(--ink);font:13px system-ui,Arial,sans-serif}
+.plotline{fill:none;stroke-linejoin:round;stroke-linecap:round}
+.note{font-size:.79rem;color:var(--muted);line-height:1.48;margin-top:9px}
+.counters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-top:14px}
+.counter{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0}
+.counter .name{display:block;color:var(--muted);font-size:.79rem}
+.counter strong{display:block;white-space:nowrap;font-size:1.02rem;font-variant-numeric:tabular-nums}
+.info{margin-top:12px;padding:12px 14px;background:var(--panel);border-radius:9px;font-size:.9rem;line-height:1.5}
+.info strong{font-weight:700}
+.info.warning{border-left:4px solid var(--amber)}
+.formula{display:flex;flex-wrap:wrap;gap:7px 22px;align-items:baseline;font-family:Georgia,"Times New Roman",serif;font-size:1.02rem;margin:10px 0 2px}
+.formula span{white-space:normal}
+.bottom{display:grid;grid-template-columns:minmax(0,0.96fr) minmax(0,1fr);gap:14px;margin-top:15px}
+.phasor-title{display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.phasor-title label{font-size:.86rem;cursor:pointer;color:var(--muted)}
+.phasor-title input{accent-color:#263b59}
+#phasorWrap[hidden]{display:none}
+#phasor{width:100%;height:auto;display:block;max-height:235px}
+.phaselabel{font:italic 18px Georgia,"Times New Roman",serif;paint-order:stroke fill;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+.formula-explain{font-size:.87rem;color:#48596e;line-height:1.55}
+button{border:1px solid var(--line);background:#fff;color:#23354b;border-radius:7px;padding:8px 10px;cursor:pointer;font:inherit;font-size:.82rem}
+button:hover{background:var(--panel)}
+button:focus-visible,input:focus-visible{outline:3px solid #7ca8ec;outline-offset:3px}
+.foot{color:var(--muted);font-size:.82rem;margin-top:13px}
+@media(max-width:880px){.charts,.bottom{grid-template-columns:1fr}.counters{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:540px){main{padding:14px}.controls{grid-template-columns:1fr}.card{padding:12px}.counters{grid-template-columns:repeat(2,minmax(0,1fr))}.charthead{display:block}}
+</style>
+</head>
+<body>
+<main>
+<h1>Synchronmaschine · Leistung und Kennlinien</h1>
+<p class="lead">Netzbetriebener <b>Synchronmotor</b>: Die mechanische Last und die Erregung verändern den Polradwinkel und den Ständerstrom. Beide Kennlinien gehören zum selben Betriebspunkt.</p>
+
+<div class="controls">
+  <section class="card">
+    <div class="fieldhead"><label for="power">Last / aufgenommene Wirkleistung <i>P</i></label><output id="powerValue" class="value" for="power">4,0 kW</output></div>
+    <input type="range" id="power" min="0" max="6" step="0.1" value="4" aria-label="Elektrische Wirkleistung in Kilowatt">
+    <div class="extents"><span>0 kW</span><span>Last erhöhen →</span><span>6 kW</span></div>
+  </section>
+  <section class="card">
+    <div class="fieldhead"><label for="excitation">Erregung <i>I</i><sub>f</sub> / <i>I</i><sub>f0</sub></label><output id="excitationValue" class="value" for="excitation">1,00</output></div>
+    <input type="range" id="excitation" min="0.50" max="1.80" step="0.01" value="1.00" aria-label="Relativer Erregerstrom">
+    <div class="extents"><span>0,50 · <i>I</i><sub>f0</sub></span><span>Erregung erhöhen →</span><span>1,80 · <i>I</i><sub>f0</sub></span></div>
+  </section>
+</div>
+
+<div class="charts">
+  <section class="card">
+    <div class="charthead"><h2>1 · Leistungs-Polradwinkel-Kennlinie</h2><span class="hint">Folie 17–18</span></div>
+    <p class="chartsub">Bei gegebener Erregung: Mehr Last erfordert einen größeren Polradwinkel.</p>
+    <svg id="powerChart" class="chartsvg" viewBox="0 0 560 365" role="img" aria-label="Wirkleistung über dem Betrag des Polradwinkels, mit markiertem Betriebspunkt">
+      <g id="powerGrid"></g>
+      <path id="powerReference" class="plotline" stroke="#b4bec9" stroke-dasharray="6 6" stroke-width="2"></path>
+      <path id="powerCurve" class="plotline" stroke="#174dcc" stroke-width="3.4"></path>
+      <line id="powerHorizontal" stroke="#ae6b08" stroke-width="1.6" stroke-dasharray="5 5"></line>
+      <line id="powerVertical" stroke="#ae6b08" stroke-width="1.6" stroke-dasharray="5 5"></line>
+      <circle id="powerDot" r="6" fill="#ae6b08" stroke="#fff" stroke-width="2.5"></circle>
+      <text id="powerDotLabel" fill="#94590a" font-size="13" font-weight="700"></text>
+      <text x="75" y="20" class="axisname">P [kW]</text>
+      <text x="440" y="348" class="axisname">|δ| [°]</text>
+    </svg>
+    <div class="note"><span style="color:#174dcc">━</span> aktuelle Erregung &nbsp; <span style="color:#aab4c1">┄</span> Referenz <i>U</i><sub>p</sub> = <i>U</i><sub>s</sub> &nbsp; <span style="color:#ae6b08">●</span> Arbeitspunkt</div>
+  </section>
+  <section class="card">
+    <div class="charthead"><h2>2 · V-Kennlinie</h2><span class="hint">Folie 19</span></div>
+    <p class="chartsub">Bei konstanter Last: Die Erregung verändert Betrag und Phasenlage des Ständerstroms.</p>
+    <svg id="vChart" class="chartsvg" viewBox="0 0 560 365" role="img" aria-label="Ständerstrom über relativer Erregung, mit Markierung des Minimums und Betriebspunkts">
+      <g id="vGrid"></g>
+      <path id="vRef0" class="plotline" stroke="#c8cfd7" stroke-width="1.8" stroke-dasharray="5 5"></path>
+      <path id="vRef6" class="plotline" stroke="#9eadbf" stroke-width="1.8" stroke-dasharray="3 5"></path>
+      <path id="vCurve" class="plotline" stroke="#168447" stroke-width="3.4"></path>
+      <line id="vOpt" stroke="#8794a3" stroke-width="1.4" stroke-dasharray="5 5"></line>
+      <line id="vVertical" stroke="#ae6b08" stroke-width="1.6" stroke-dasharray="4 5"></line>
+      <circle id="vDot" r="6" fill="#ae6b08" stroke="#fff" stroke-width="2.5"></circle>
+      <text id="vDotLabel" fill="#94590a" font-size="13" font-weight="700"></text>
+      <text id="vOptLabel" fill="#657385" font-size="12" text-anchor="middle">cos φ = 1</text>
+      <text x="75" y="20" class="axisname">Iₛ [A]</text>
+      <text x="382" y="348" class="axisname">I_f / I_f0</text>
+    </svg>
+    <div class="note"><span style="color:#168447">━</span> aktuelle Last &nbsp; <span style="color:#b5bec8">┄</span> 0 kW &nbsp; <span style="color:#9eadbf">┈</span> 6 kW &nbsp; <span style="color:#ae6b08">●</span> Arbeitspunkt</div>
+  </section>
+</div>
+
+<div class="counters" aria-live="polite">
+  <div class="counter"><span class="name">Polradspannung <i>U</i><sub>p</sub></span><strong id="upVal">—</strong></div>
+  <div class="counter"><span class="name">Polradwinkel <i>δ</i></span><strong id="deltaVal">—</strong></div>
+  <div class="counter"><span class="name">Ständerstrom <i>I</i><sub>s</sub></span><strong id="isVal">—</strong></div>
+  <div class="counter"><span class="name">Leistungsfaktor cos φ</span><strong id="cosVal">—</strong></div>
+  <div class="counter"><span class="name">Drehmoment <i>M</i></span><strong id="momentVal">—</strong></div>
+</div>
+
+<div id="status" class="info" aria-live="polite"></div>
+
+<div class="bottom">
+  <section class="card">
+    <div class="phasor-title"><h2>Zeigerdiagramm zum Betriebspunkt</h2><label><input type="checkbox" id="showPhasor" checked> anzeigen</label></div>
+    <div id="phasorWrap">
+      <svg id="phasor" viewBox="0 0 470 252" role="img" aria-label="Motor-Zeigerdiagramm passend zu den Kennlinien">
+        <defs>
+          <marker id="headB" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#174dcc"/></marker>
+          <marker id="headG" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#168447"/></marker>
+          <marker id="headR" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#d22d39"/></marker>
+          <marker id="headGray" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L8 3 L0 6Z" fill="#8995a4"/></marker>
+        </defs>
+        <line x1="18" y1="115" x2="454" y2="115" stroke="#bcc6d1" stroke-width="1.1"/>
+        <line x1="90" y1="235" x2="90" y2="13" stroke="#bcc6d1" stroke-width="1.1"/>
+        <text x="432" y="134" fill="#8894a0" font-size="13">Re</text>
+        <text x="70" y="15" fill="#8894a0" font-size="13">Im</text>
+        <line id="pUs" stroke="#174dcc" stroke-width="3" marker-end="url(#headB)"/>
+        <line id="pUp" stroke="#168447" stroke-width="3" marker-end="url(#headG)"/>
+        <line id="pI" stroke="#d22d39" stroke-width="2.7" marker-end="url(#headR)"/>
+        <line id="pJ" stroke="#d22d39" stroke-width="2.4" marker-end="url(#headR)"/>
+        <line id="pMinusJ" stroke="#8995a4" stroke-width="2.3" stroke-dasharray="6 5" marker-end="url(#headGray)"/>
+        <path id="pDeltaArc" fill="none" stroke="#168447" stroke-width="1.7"/>
+        <text id="pUsL" fill="#174dcc" class="phaselabel">Uₛ</text>
+        <text id="pUpL" fill="#168447" class="phaselabel">Uₚ</text>
+        <text id="pIL" fill="#d22d39" class="phaselabel">Iₛ</text>
+        <text id="pJL" fill="#d22d39" font-size="15">jX_d Iₛ</text>
+        <text id="pDeltaL" fill="#168447" font-size="14" font-style="italic">δ</text>
+        <text id="pMessage" x="115" y="217" fill="#a0610c" font-size="12"></text>
+      </svg>
+      <p class="note"><span style="color:#174dcc">━</span> <i>U</i><sub>s</sub> &nbsp; <span style="color:#168447">━</span> <i>U</i><sub>p</sub> &nbsp; <span style="color:#d22d39">━</span> <i>I</i><sub>s</sub>, <i>jX<sub>d</sub>I<sub>s</sub></i> &nbsp; <span style="color:#8794a3">┄</span> −<i>jX<sub>d</sub>I<sub>s</sub></i><br>Stromzeiger mit eigener Längenskalierung.</p>
+    </div>
+  </section>
+  <section class="card">
+    <div class="charthead"><h2>Zusammenhang der Größen</h2><button id="optButton" type="button">Stromminimum einstellen</button></div>
+    <div class="formula"><span><i>P</i> = 3 <i>U</i><sub>s</sub> <i>U</i><sub>p</sub> / <i>X</i><sub>d</sub> · sin |<i>δ</i>|</span></div>
+    <div class="formula"><span><i>U</i><sub>p</sub> / <i>U</i><sub>s</sub> = <i>I</i><sub>f</sub> / <i>I</i><sub>f0</sub></span></div>
+    <div class="formula"><span><i>U⃗</i><sub>p</sub> = <i>U⃗</i><sub>s</sub> − j<i>X</i><sub>d</sub><i>I⃗</i><sub>s</sub> &nbsp; (Motor)</span></div>
+    <div id="numerics" class="formula-explain" style="margin-top:10px"></div>
+    <p class="note">Fest: <i>U</i><sub>s</sub> = 400/√3 V ≈ 230,94 V; <i>X</i><sub>d</sub> = 20 Ω; <i>f</i> = 50 Hz; <i>p</i> = 2. Näherung: <i>R</i><sub>s</sub> = 0, keine Sättigung und <i>U</i><sub>p</sub> ∝ <i>I</i><sub>f</sub>. Der Winkel <i>δ</i> ist im Motorbetrieb negativ.</p>
+  </section>
+</div>
+<p class="foot">Grundlage: Kapitel 3, Folien 17–19 („Leistung und Kennlinien“). Das Modell beschreibt die fremderregte Synchronmaschine am starren Netz; die V-Kurve ist kein Kennlinienmodell einer PMSM mit unveränderlichem Permanentmagnetfluss.</p>
+</main>
+<script>
+(()=>{
+'use strict';
+const Us=400/Math.sqrt(3), Xd=20, f=50, poles=2;
+const XMIN=.5, XMAX=1.8, PMAX_SLIDER=6, basePmax=3*Us*Us/Xd/1000;
+const NS=60*f/poles, OMEGA=2*Math.PI*NS/60;
+const G={x:70,y:30,w:456,h:283};
+const $=id=>document.getElementById(id);
+const fmt=(x,n=2)=>Number(x).toLocaleString('de-DE',{minimumFractionDigits:n,maximumFractionDigits:n});
+const xP=deg=>G.x+G.w*deg/90, yP=kw=>G.y+G.h*(1-kw/16);
+const xV=r=>G.x+G.w*(r-XMIN)/(XMAX-XMIN), yV=amps=>G.y+G.h*(1-amps/20);
+const xs=ns=>'http://www.w3.org/2000/svg';
+function elem(tag,attrs,parent,txt){const node=document.createElementNS(xs(),tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,String(v));if(txt!==undefined)node.textContent=txt;parent.appendChild(node);return node;}
+function axes(groupId,xticks,yticks,xf,yf,xlabel,ylabel){
+ const g=$(groupId);g.innerHTML='';
+ for(const y of yticks){let py=yf(y);elem('line',{x1:G.x,y1:py,x2:G.x+G.w,y2:py,stroke:'#e3e8ee','stroke-width':1},g);elem('text',{x:G.x-11,y:py+4,'text-anchor':'end',class:'tick'},g,ylabel(y));}
+ for(const x of xticks){let px=xf(x);elem('line',{x1:px,y1:G.y,x2:px,y2:G.y+G.h,stroke:'#edf0f4','stroke-width':1},g);elem('text',{x:px,y:G.y+G.h+19,'text-anchor':'middle',class:'tick'},g,xlabel(x));}
+ elem('line',{x1:G.x,y1:G.y,x2:G.x,y2:G.y+G.h,stroke:'#8794a3','stroke-width':1.4},g);
+ elem('line',{x1:G.x,y1:G.y+G.h,x2:G.x+G.w,y2:G.y+G.h,stroke:'#8794a3','stroke-width':1.4},g);
+}
+axes('powerGrid',[0,30,60,90],[0,4,8,12,16],xP,yP,x=>`${x}°`,y=>String(y));
+axes('vGrid',[.5,.75,1,1.25,1.5,1.75],[0,5,10,15,20],xV,yV,x=>fmt(x,2),y=>String(y));
+function calc(PkW,r){
+ const up=r*Us,pmax=basePmax*r;
+ if(PkW>pmax+1e-9)return {valid:false,up,pmax};
+ const ratio=Math.min(1,Math.max(0,PkW/pmax));
+ const theta=Math.asin(ratio); // magnitude of load angle
+ const reI=PkW*1000/(3*Us);
+ const imI=(up*Math.cos(theta)-Us)/Xd;
+ const is=Math.hypot(reI,imI);
+ const phi=is<1e-9?null:Math.atan2(imI,reI); // positive = capacitive (leading)
+ const classification=is<1e-9?'stromlos':Math.abs(imI)<.0005?'cos φ = 1':imI>0?'übererregt · kapazitiv':'untererregt · induktiv';
+ const cos=is<1e-9?null:reI/is;
+ return {valid:true,up,pmax,theta,delta:-theta,reI,imI,is,cos,phi,classification};
+}
+function pathLine(samples,xx,yy){return samples.filter(d=>Number.isFinite(d[0])&&Number.isFinite(d[1])).map((d,i)=>`${i?'L':'M'}${xx(d[0]).toFixed(2)},${yy(d[1]).toFixed(2)}`).join(' ');}
+function pLine(r){const samples=[];for(let i=0;i<=200;i++){const d=i*90/200;samples.push([d,basePmax*r*Math.sin(d*Math.PI/180)]);}return pathLine(samples,xP,yP);}
+function vLine(P){let data=[],started=false,path='';for(let i=0;i<=520;i++){
+ const r=XMIN+(XMAX-XMIN)*i/520,c=calc(P,r);
+ if(!c.valid){started=false;continue;}
+ let x=xV(r),y=yV(c.is);path+=`${started?'L':'M'}${x.toFixed(2)},${y.toFixed(2)} `;started=true;
+}return path;}
+function setline(id,x1,y1,x2,y2){let el=$(id);Object.entries({x1,y1,x2,y2}).forEach(([k,v])=>el.setAttribute(k,String(v)));}
+function vis(id,on){$(id).style.display=on?'':'none';}
+const O={x:90,y:115},sv=.56,si=7.0;
+function arrow(id,a,b){setline(id,a.x,a.y,b.x,b.y);}
+function arcPath(radius,theta){const a=-theta, end={x:O.x+radius*Math.cos(a),y:O.y-radius*Math.sin(a)};return `M ${O.x+radius} ${O.y} A ${radius} ${radius} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;}
+function place(id,x,y){$(id).setAttribute('x',x);$(id).setAttribute('y',y);}
+function updatePhasor(c){
+ const usEnd={x:O.x+Us*sv,y:O.y};arrow('pUs',O,usEnd);place('pUsL',usEnd.x+8,usEnd.y-8);
+ if(!c.valid){['pUp','pI','pJ','pMinusJ','pDeltaArc','pUpL','pIL','pJL','pDeltaL'].forEach(id=>vis(id,false));$('pMessage').textContent='Kein stationärer Arbeitspunkt (P > Pₘₐₓ).';return;}
+ $('pMessage').textContent='';['pUp','pI','pJ','pMinusJ','pUpL','pIL','pJL'].forEach(id=>vis(id,true));
+ const upRe=c.up*Math.cos(c.theta),upIm=-c.up*Math.sin(c.theta);
+ const upEnd={x:O.x+upRe*sv,y:O.y-upIm*sv};
+ const iEnd={x:O.x+c.reI*si,y:O.y-c.imI*si};
+ arrow('pUp',O,upEnd);arrow('pI',O,iEnd);arrow('pJ',upEnd,usEnd);arrow('pMinusJ',usEnd,upEnd);
+ place('pUpL',upEnd.x+8,upEnd.y+((upIm<0)?19:-7));
+ place('pIL',iEnd.x+8,iEnd.y+(c.imI>0?-5:17));
+ place('pJL',(upEnd.x+usEnd.x)/2+7,(upEnd.y+usEnd.y)/2-7);
+ vis('pDeltaArc',c.theta>.04);vis('pDeltaL',c.theta>.04);
+ if(c.theta>.04){$('pDeltaArc').setAttribute('d',arcPath(34,c.theta));place('pDeltaL',O.x+50*Math.cos(-c.theta/2),O.y+50*Math.sin(c.theta/2)+5);}
+}
+function update(){
+ const P=Number($('power').value),r=Number($('excitation').value);
+ $('powerValue').textContent=fmt(P,1)+' kW';$('excitationValue').textContent=fmt(r,2);
+ let c=calc(P,r);
+ $('powerReference').setAttribute('d',pLine(1));$('powerCurve').setAttribute('d',pLine(r));
+ $('vRef0').setAttribute('d',vLine(0));$('vRef6').setAttribute('d',vLine(6));$('vCurve').setAttribute('d',vLine(P));
+ const rr=Math.sqrt(1+Math.pow(P/basePmax,2));
+ $('vOpt').setAttribute('x1',xV(rr));$('vOpt').setAttribute('x2',xV(rr));$('vOpt').setAttribute('y1',G.y+13);$('vOpt').setAttribute('y2',G.y+G.h);
+ place('vOptLabel',xV(rr),G.y+11);
+ // Operating point on power curve and V curve; unavailable operating points are not fabricated.
+ for(const id of ['powerDot','powerDotLabel','powerVertical','powerHorizontal','vDot','vDotLabel','vVertical'])vis(id,c.valid);
+ if(c.valid){
+ const deg=c.theta*180/Math.PI, xp=xP(deg),yp=yP(P),xv=xV(r),yv=yV(c.is);
+ $('powerDot').setAttribute('cx',xp);$('powerDot').setAttribute('cy',yp);
+ setline('powerHorizontal',G.x,yp,xp,yp);setline('powerVertical',xp,yp,xp,G.y+G.h);
+ place('powerDotLabel',Math.min(xp+8,G.x+G.w-77),Math.max(yp-10,G.y+14));
+ $('powerDotLabel').textContent=fmt(deg,1)+'°';
+ $('vDot').setAttribute('cx',xv);$('vDot').setAttribute('cy',yv);
+ setline('vVertical',xv,yv,xv,G.y+G.h);
+ place('vDotLabel',Math.min(xv+8,G.x+G.w-50),Math.max(yv-11,G.y+14));
+ $('vDotLabel').textContent=fmt(c.is,2)+' A';
+ }
+ $('upVal').textContent=fmt(c.up,1)+' V';
+ $('momentVal').textContent=fmt(P*1000/OMEGA,1)+' Nm';
+ $('deltaVal').textContent=c.valid?'−'+fmt(c.theta*180/Math.PI,1)+'°':'—';
+ $('isVal').textContent=c.valid?fmt(c.is,2)+' A':'—';
+ $('cosVal').textContent=!c.valid||c.cos===null?'—':fmt(c.cos,3);
+ let status=$('status');status.className='info'+(c.valid?'':' warning');
+ if(!c.valid){
+  status.innerHTML=`<strong>Kein stationärer synchroner Arbeitspunkt:</strong> Bei dieser Erregung beträgt die maximale übertragbare Wirkleistung <strong>${fmt(c.pmax,2)} kW</strong>. Gefordert sind ${fmt(P,2)} kW. Der stabile Bereich (|δ| ≤ 90°) ist überschritten.`;
+  $('numerics').innerHTML=`<p>Die stationäre Gleichung würde sin |δ| = ${fmt(P/c.pmax,2)} &gt; 1 erfordern. Es gibt hier keine reelle Lösung für δ.</p>`;
+ }else{
+  let state=c.classification;
+  let diffP=c.pmax-P;
+  status.innerHTML=`<strong>${state.charAt(0).toUpperCase()+state.slice(1)}</strong> · `+
+    (c.cos===null?'Bei Leerlauf und passender Erregung fließt kein Strom; cos φ ist dann nicht definiert.':
+    `Strom ${c.imI>0?'voreilend':c.imI<0?'nacheilend':'phasengleich'}; bei konstantem P ist das Stromminimum bei I<sub>f</sub>/I<sub>f0</sub> = ${fmt(rr,3)}.`)+
+    ` &nbsp; <span style="color:#657385">P<sub>max</sub> = ${fmt(c.pmax,2)} kW; Reserve ${fmt(diffP,2)} kW.</span>`;
+  let upre=c.up*Math.cos(c.theta),upim=-c.up*Math.sin(c.theta);
+  $('numerics').innerHTML=`<p>|δ| = arcsin(P X<sub>d</sub> / (3 U<sub>s</sub> U<sub>p</sub>)) = <strong>${fmt(c.theta*180/Math.PI,2)}°</strong>; für den Motor δ = <strong>−${fmt(c.theta*180/Math.PI,2)}°</strong>.</p>`+
+    `<p>U⃗<sub>p</sub> = ${fmt(upre,1)} − j ${fmt(Math.abs(upim),1)} V; &nbsp; I⃗<sub>s</sub> = ${fmt(c.reI,2)} ${c.imI>=0?'+':'−'} j ${fmt(Math.abs(c.imI),2)} A.</p>`;
+ }
+ updatePhasor(c);
+}
+$('power').addEventListener('input',update);$('excitation').addEventListener('input',update);
+$('showPhasor').addEventListener('change',()=>{$('phasorWrap').hidden=!$('showPhasor').checked;});
+$('optButton').addEventListener('click',()=>{let P=Number($('power').value),rr=Math.sqrt(1+Math.pow(P/basePmax,2));$('excitation').value=String(Math.min(XMAX,Math.max(XMIN,Math.round(rr*100)/100)));update();});
+update();
+})();
+</script>
+</body>
+</html>

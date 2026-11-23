@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TurtleBot – kinematisches Modell</title>
+<style>
+  :root { color-scheme: light; --ink:#16283f; --muted:#66768a; --line:#dfe6ee; --primary:#126aa4; --bg:#f5f8fb; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .layout { width:min(1220px,calc(100% - 32px)); margin:24px auto; }
+  h1 { font-size:clamp(1.4rem,2.6vw,2rem); line-height:1.2; margin:0 0 5px; }
+  .subtitle { color:var(--muted); margin:0 0 19px; }
+  .main { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; align-items:stretch; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 3px 18px rgba(12,42,70,.035); }
+  .field { position:relative; min-height:475px; background:#fcfdff; }
+  canvas { display:block; width:100%; height:475px; touch-action:pan-y; }
+  .chart-hint { position:absolute; bottom:12px; left:14px; background:rgba(255,255,255,.88); border-radius:7px; padding:5px 8px; color:var(--muted); font-size:12px; pointer-events:none; }
+  .controls { padding:19px; }
+  .controls h2 { margin:0 0 17px; font-size:1.05rem; }
+  .cmd { margin-bottom:23px; }
+  .cmd-name { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:9px; font-weight:650; }
+  .cmd-name .units { color:var(--muted); font-weight:400; font-size:13px; }
+  .sliderrow { display:grid; grid-template-columns:minmax(0,1fr) 84px 34px; align-items:center; gap:9px; }
+  input[type=range] { width:100%; accent-color:var(--primary); cursor:pointer; }
+  input[type=number] { width:100%; padding:8px 6px; border:1px solid #cbd7e3; border-radius:6px; text-align:right; color:var(--ink); font:inherit; font-variant-numeric:tabular-nums; }
+  .tiny,button { cursor:pointer; border-radius:7px; font:inherit; }
+  .tiny { border:1px solid #cbd7e3; background:#fff; height:35px; font-size:13px; font-weight:650; }
+  .btnrow { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:5px 0 13px; }
+  button.primary { background:var(--primary); color:white; border:1px solid var(--primary); padding:10px 12px; font-weight:650; }
+  button.secondary { background:#fff; color:var(--ink); border:1px solid #cbd7e3; padding:10px 12px; }
+  button:hover { filter:brightness(.97); }
+  button:focus-visible,input:focus-visible { outline:3px solid #8ac6eb; outline-offset:2px; }
+  .readout { border-top:1px solid var(--line); padding-top:14px; margin-top:17px; }
+  .readout-head { font-weight:650; margin-bottom:8px; }
+  .state { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .value { background:#f5f8fb; border-radius:8px; padding:10px; }
+  .value .key { display:block; font-size:12px; color:var(--muted); }
+  .value .num { font-size:19px; font-weight:650; font-variant-numeric:tabular-nums; }
+  .foot { margin-top:16px; padding:17px 20px; }
+  .foot h2 { font-size:1rem; margin:0 0 7px; }
+  .math { font-family:"Cambria Math","STIX Two Math",Georgia,serif; font-size:17px; line-height:1.8; overflow-x:auto; white-space:nowrap; }
+  .math .line { display:block; }
+  .foot p { color:var(--muted); font-size:13px; margin:9px 0 0; }
+  .equations { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .equations h3 { font-size:13px; margin:2px 0 5px; }
+  .equation-box { min-width:0; }
+  @media(max-width:800px) { .main { grid-template-columns:1fr; } .field,canvas { min-height:380px; height:380px; } .equations { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main class="layout">
+  <h1>TurtleBot – kinematisches Modell</h1>
+  <p class="subtitle">Wähle eine lineare Geschwindigkeit <i>v</i> und Winkelgeschwindigkeit <i>ω</i>. Der Roboter folgt der exakten Lösung für konstante Eingaben.</p>
+
+  <section class="main" aria-label="Interaktive Simulation">
+    <div class="panel field">
+      <canvas id="world" aria-label="2D-Karte mit TurtleBot und zurückgelegter Fahrspur"></canvas>
+      <div class="chart-hint">Draufsicht · Gitterabstand 1 m · blau = Fahrspur</div>
+    </div>
+    <div class="panel controls">
+      <h2>Steuereingänge</h2>
+      <div class="cmd">
+        <div class="cmd-name"><span>Linear <i>v</i></span><span class="units">m/s</span></div>
+        <div class="sliderrow">
+          <input id="vSlider" aria-label="Lineargeschwindigkeit" type="range" min="-1" max="1" step="0.01" value="0">
+          <input id="vNumber" aria-label="Lineargeschwindigkeit in Meter pro Sekunde" type="number" min="-1" max="1" step="0.01" value="0.00">
+          <button class="tiny" id="vZero" aria-label="Lineargeschwindigkeit auf null setzen" title="v = 0">0</button>
+        </div>
+      </div>
+      <div class="cmd">
+        <div class="cmd-name"><span>Rotation <i>ω</i></span><span class="units">rad/s</span></div>
+        <div class="sliderrow">
+          <input id="wSlider" aria-label="Winkelgeschwindigkeit" type="range" min="-2" max="2" step="0.01" value="0">
+          <input id="wNumber" aria-label="Winkelgeschwindigkeit in Radiant pro Sekunde" type="number" min="-2" max="2" step="0.01" value="0.00">
+          <button class="tiny" id="wZero" aria-label="Winkelgeschwindigkeit auf null setzen" title="ω = 0">0</button>
+        </div>
+      </div>
+      <div class="btnrow">
+        <button class="primary" id="stop">Stopp (v, ω = 0)</button>
+        <button class="secondary" id="reset">Reset</button>
+      </div>
+      <button class="secondary" id="pause" style="width:100%">⏸ Pause</button>
+      <div class="readout" aria-live="off">
+        <div class="readout-head">Zustand (Weltkoordinaten)</div>
+        <div class="state">
+          <div class="value"><span class="key">x [m]</span><span class="num" id="posX">0.00</span></div>
+          <div class="value"><span class="key">y [m]</span><span class="num" id="posY">0.00</span></div>
+          <div class="value"><span class="key">ψ [°]</span><span class="num" id="heading">0.0</span></div>
+          <div class="value"><span class="key">t [s]</span><span class="num" id="simTime">0.0</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel foot">
+    <h2>Modell und explizite Lösung</h2>
+    <div class="equations">
+      <div class="equation-box">
+        <h3>Differentialgleichung</h3>
+        <div class="math">
+          <span class="line">ẋ = v cos ψ</span>
+          <span class="line">ẏ = v sin ψ</span>
+          <span class="line">ψ̇ = ω</span>
+        </div>
+      </div>
+      <div class="equation-box">
+        <h3>Exakte Lösung für konstante v, ω über Δt</h3>
+        <div class="math">
+          <span class="line">ψ₁ = ψ₀ + ω Δt</span>
+          <span class="line">x₁ = x₀ + (v/ω) [sin ψ₁ − sin ψ₀]</span>
+          <span class="line">y₁ = y₀ − (v/ω) [cos ψ₁ − cos ψ₀]</span>
+        </div>
+        <p>Für ω = 0 gilt: x₁ = x₀ + v Δt cos ψ₀, y₁ = y₀ + v Δt sin ψ₀.</p>
+      </div>
+    </div>
+    <p>Bei jeder Änderung von v oder ω beginnt ein neuer Abschnitt mit konstanten Eingängen. Jeder Abschnitt wird analytisch berechnet (keine Euler-Integration). Für ω ≠ 0 ist der Kurvenradius |R| = |v/ω|; für v = 0 kann der Roboter auf der Stelle drehen. Idealisiertes kinematisches Unicycle-/Differential-Drive-Modell ohne Schlupf oder Beschleunigungsgrenzen.</p>
+  </section>
+</main>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById('world');
+  const ctx = canvas.getContext('2d');
+  const refs = {
+    vS:document.getElementById('vSlider'), vN:document.getElementById('vNumber'),
+    wS:document.getElementById('wSlider'), wN:document.getElementById('wNumber'),
+    x:document.getElementById('posX'), y:document.getElementById('posY'),
+    psi:document.getElementById('heading'), t:document.getElementById('simTime'),
+    pause:document.getElementById('pause')
+  };
+  let width=800, height=475;
+  const scale=72; // Pixel pro Meter
+  let camera={x:0,y:0};
+  let pose={x:0,y:0,psi:0};
+  let startPose={x:0,y:0,psi:0};
+  let v=0, w=0, simT=0, startT=0, paused=false;
+  let path=[{x:0,y:0}];
+  let lastTimestamp=null;
+
+  // Analytische Loesung fuer ein Intervall mit konstantem (v, omega).
+  function exactPose(p0, linear, angular, duration) {
+    const psi1 = p0.psi + angular*duration;
+    if (Math.abs(angular) < 1e-8) {
+      return {
+        x:p0.x + linear*duration*Math.cos(p0.psi),
+        y:p0.y + linear*duration*Math.sin(p0.psi),
+        psi:psi1
+      };
+    }
+    return {
+      x:p0.x + (linear/angular)*(Math.sin(psi1)-Math.sin(p0.psi)),
+      y:p0.y - (linear/angular)*(Math.cos(psi1)-Math.cos(p0.psi)),
+      psi:psi1
+    };
+  }
+  function command(newV,newW) {
+    // Aktuellen Zustand als Anfangszustand des neuen konstanten Abschnitts speichern.
+    startPose={...pose};
+    startT=simT;
+    v=newV; w=newW;
+  }
+  function setV(value) {
+    const parsed=Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const next=Math.min(1,Math.max(-1,parsed));
+    refs.vS.value=next;
+    refs.vN.value=next.toFixed(2);
+    command(next,w);
+  }
+  function setW(value) {
+    const parsed=Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const next=Math.min(2,Math.max(-2,parsed));
+    refs.wS.value=next;
+    refs.wN.value=next.toFixed(2);
+    command(v,next);
+  }
+  refs.vS.addEventListener('input', () => setV(refs.vS.value));
+  refs.wS.addEventListener('input', () => setW(refs.wS.value));
+  refs.vN.addEventListener('change', () => setV(refs.vN.value));
+  refs.wN.addEventListener('change', () => setW(refs.wN.value));
+  document.getElementById('vZero').addEventListener('click', () => setV(0));
+  document.getElementById('wZero').addEventListener('click', () => setW(0));
+  document.getElementById('stop').addEventListener('click', () => {setV(0);setW(0);});
+  document.getElementById('reset').addEventListener('click', () => {
+    simT=0; startT=0; pose={x:0,y:0,psi:0}; startPose={...pose};
+    camera={x:0,y:0}; path=[{x:0,y:0}];
+    setV(0);setW(0);
+    paused=false; refs.pause.textContent='⏸ Pause';
+    lastTimestamp=null;
+    render();
+  });
+  refs.pause.addEventListener('click', () => {
+    paused=!paused;
+    refs.pause.textContent=paused?'▶ Weiter':'⏸ Pause';
+    lastTimestamp=null;
+  });
+  function resize() {
+    const rect=canvas.getBoundingClientRect();
+    width=rect.width; height=rect.height;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.max(1,Math.round(width*dpr));
+    canvas.height=Math.max(1,Math.round(height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    render();
+  }
+  function px(x) {return width/2+(x-camera.x)*scale;}
+  function py(y) {return height/2-(y-camera.y)*scale;}
+  function line(ax,ay,bx,by,color,lineWidth=1) {
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);
+    ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.stroke();
+  }
+  function drawGrid() {
+    ctx.fillStyle='#fcfdff';ctx.fillRect(0,0,width,height);
+    const minX=camera.x-width/(2*scale), maxX=camera.x+width/(2*scale);
+    const minY=camera.y-height/(2*scale), maxY=camera.y+height/(2*scale);
+    for(let x=Math.ceil(minX);x<=maxX;x++)line(px(x),0,px(x),height,x===0?'#9dafc1':'#e6edf3',x===0?1.7:1);
+    for(let y=Math.ceil(minY);y<=maxY;y++)line(0,py(y),width,py(y),y===0?'#9dafc1':'#e6edf3',y===0?1.7:1);
+    ctx.font='12px system-ui, sans-serif';ctx.fillStyle='#8798ab';
+    for(let x=Math.ceil(minX);x<=maxX;x++)if(x!==0)ctx.fillText(x+'',px(x)+4,Math.max(13,Math.min(height-5,py(0)-6)));
+    for(let y=Math.ceil(minY);y<=maxY;y++)if(y!==0)ctx.fillText(y+'',Math.max(4,Math.min(width-28,px(0)+5)),py(y)-6);
+    // Weltachsen: positive x nach rechts, positive y nach oben.
+    ctx.font='bold 13px system-ui, sans-serif';ctx.fillStyle='#52728e';
+    if(py(0)>8 && py(0)<height-8)ctx.fillText('x',width-17,py(0)-9);
+    if(px(0)>8 && px(0)<width-8)ctx.fillText('y',px(0)+10,17);
+    if(px(0)>12&&px(0)<width-30 && py(0)>15&&py(0)<height-15)ctx.fillText('0',px(0)+6,py(0)+15);
+  }
+  function drawTrail() {
+    if(path.length<2)return;
+    ctx.strokeStyle='#398bc6';ctx.lineWidth=2.8;
+    ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();
+    ctx.moveTo(px(path[0].x),py(path[0].y));
+    for(let i=1;i<path.length;i++)ctx.lineTo(px(path[i].x),py(path[i].y));
+    ctx.stroke();
+  }
+  function drawRobot() {
+    const x=px(pose.x),y=py(pose.y);
+    ctx.save();ctx.translate(x,y);ctx.rotate(-pose.psi);
+    // Pfeil zeigt in Roboterlaengsrichtung +x.
+    line(0,0,43,0,'#d37827',2.6);
+    ctx.beginPath();ctx.moveTo(43,0);ctx.lineTo(34,-5);ctx.lineTo(34,5);ctx.closePath();
+    ctx.fillStyle='#d37827';ctx.fill();
+    // Zwei seitliche Antriebsraeder und runde TurtleBot-Plattform.
+    ctx.fillStyle='#37465c';
+    ctx.fillRect(-11,-24,23,7);ctx.fillRect(-11,17,23,7);
+    ctx.beginPath();ctx.arc(0,0,21,0,2*Math.PI);ctx.fillStyle='#e9f0f5';ctx.fill();
+    ctx.strokeStyle='#284e68';ctx.lineWidth=2.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(0,0,13.5,0,2*Math.PI);ctx.fillStyle='#75bdd1';ctx.fill();
+    ctx.beginPath();ctx.arc(0,0,5,0,2*Math.PI);ctx.fillStyle='#1c5c80';ctx.fill();
+    ctx.beginPath();ctx.moveTo(19,0);ctx.lineTo(9,-8);ctx.lineTo(9,8);ctx.closePath();
+    ctx.fillStyle='#126aa4';ctx.fill();
+    ctx.restore();
+  }
+  function adjustCamera() {
+    const x=px(pose.x),y=py(pose.y);
+    if(x>width*.82) camera.x+=(x-width*.82)/scale;
+    if(x<width*.18) camera.x+=(x-width*.18)/scale;
+    if(y>height*.82) camera.y-=(y-height*.82)/scale;
+    if(y<height*.18) camera.y-=(y-height*.18)/scale;
+  }
+  function render() {
+    if(!width||!height)return;
+    adjustCamera();drawGrid();drawTrail();drawRobot();
+    refs.x.textContent=pose.x.toFixed(2);
+    refs.y.textContent=pose.y.toFixed(2);
+    // Anzeige auf [-180,180] Grad begrenzen, intern bleibt psi kontinuierlich.
+    const normalized=Math.atan2(Math.sin(pose.psi),Math.cos(pose.psi));
+    refs.psi.textContent=(normalized*180/Math.PI).toFixed(1);
+    refs.t.textContent=simT.toFixed(1);
+  }
+  function animate(timestamp) {
+    if(lastTimestamp===null)lastTimestamp=timestamp;
+    const dt=Math.max(0,Math.min((timestamp-lastTimestamp)/1000,.05));
+    lastTimestamp=timestamp;
+    if(!paused) {
+      simT+=dt;
+      pose=exactPose(startPose,v,w,simT-startT);
+      const last=path[path.length-1];
+      const dx=pose.x-last.x,dy=pose.y-last.y;
+      if(dx*dx+dy*dy>.00014) {
+        path.push({x:pose.x,y:pose.y});
+        if(path.length>12000)path.shift();
+      }
+    }
+    render();
+    requestAnimationFrame(animate);
+  }
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+  requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

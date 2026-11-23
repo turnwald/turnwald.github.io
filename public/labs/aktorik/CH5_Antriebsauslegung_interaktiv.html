@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auslegung eines PMSM/BLDC-Antriebs</title>
+<style>
+:root { color-scheme:light; --text:#202936;--muted:#586779;--surface:#f5f7fa;--border:#d9e0e9;--blue:#2458ab;--green:#16825e;--orange:#bb6532;--indigo:#6653a0; }
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--text);background:#fff}
+main{max-width:1200px;margin:auto;padding:24px 24px 36px}
+h1{font-size:clamp(1.35rem,2.5vw,1.78rem);line-height:1.25;margin:0 0 7px;letter-spacing:-.025em}
+p.lead{margin:0 0 16px;color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(290px,1fr);gap:16px;align-items:start}
+.card{border:1px solid var(--border);border-radius:12px;padding:16px;min-width:0}
+h2{font-size:1.04rem;margin:0 0 10px}
+.chart-scroll{overflow-x:auto;scrollbar-width:thin}
+#chart{width:100%;min-width:540px;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:8px 15px;color:var(--muted);font-size:.8rem;margin:8px 0 0}
+.legend b{display:inline-block;width:23px;height:0;border-top:3px solid;vertical-align:middle;margin-right:5px}
+.labelrow{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:5px}
+.labelrow label{font-weight:650}
+.readout{font-weight:700;color:#17283e;white-space:nowrap;font-variant-numeric:tabular-nums}
+.control{margin-top:14px}
+input[type=range]{width:100%;height:28px;accent-color:#244b7c;cursor:pointer}
+.range-ends{display:flex;justify-content:space-between;color:var(--muted);font-size:.75rem;margin-top:-4px}
+.presets{display:flex;flex-wrap:wrap;gap:7px}
+button{background:#fff;color:var(--text);border:1px solid var(--border);border-radius:7px;padding:9px 11px;font:inherit;cursor:pointer}
+button:hover{background:var(--surface)}
+button:focus-visible,input:focus-visible{outline:3px solid #7daee9;outline-offset:3px}
+.smallnote{font-size:.82rem;color:var(--muted);margin:10px 0 0}
+.param{font-size:.88rem;color:#3c4e61;background:var(--surface);padding:11px 13px;border-radius:8px;line-height:1.65;margin-top:17px}
+.results{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:15px 0 0}
+.stat{background:var(--surface);border:1px solid var(--border);padding:10px 12px;border-radius:9px;min-width:0}
+.stat .k{font-size:.78rem;color:var(--muted)}
+.stat .v{font-size:1.12rem;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.status{margin:13px 0 0;padding:12px 14px;background:#f0f9f4;color:#146943;border:1px solid #b9dfc8;border-radius:9px;font-weight:620}
+.status.bad{background:#fff6ed;color:#934e22;border-color:#edcba7}
+.twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px}
+.finding{padding:13px 14px;border:1px solid var(--border);border-radius:10px}
+.finding h3{font-size:.9rem;margin:0 0 5px}
+.finding .major{font-size:1.26rem;font-weight:750;font-variant-numeric:tabular-nums}
+.finding .minor{font-size:.82rem;color:var(--muted);margin-top:5px}
+.section{margin-top:16px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.step{padding:12px 13px;background:var(--surface);border-radius:10px;min-width:0}
+.step h3{margin:0 0 8px;font-size:.89rem}
+.step .formula{font-family:"Cambria Math",Georgia,serif;font-size:.99rem;line-height:1.8}
+.step .value{font-size:.85rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.6}
+.meter-row{display:grid;grid-template-columns:74px minmax(0,1fr) 75px;align-items:center;gap:10px;font-size:.82rem;margin-top:8px}
+.meter{height:10px;border-radius:12px;background:#e3e7ed;overflow:hidden;position:relative}
+.meter>div{height:100%;background:var(--blue);width:0;transition:width .07s linear}
+.meter.over>div{background:var(--orange)}
+.summary{font-size:.85rem;color:#526171;line-height:1.6;margin:14px 0 0}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.results{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){main{padding:14px}.steps,.twocol{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Auslegung eines PMSM/BLDC-Antriebs</h1>
+  <p class="lead">Kapitel 5 · Übungen 8 und 9 — Last, Getriebe, Stromgrenze und Spannungsgrenze im vereinfachten Modell.</p>
+  <div class="layout">
+    <section class="card" aria-label="Drehmoment-Drehzahl-Diagramm">
+      <h2>Zulässiger Drehmoment-Drehzahl-Bereich</h2>
+      <div class="chart-scroll">
+        <svg id="chart" viewBox="0 0 740 455" role="img" aria-label="Lastmoment über Lastdrehzahl; die grüne Fläche zeigt erreichbare Betriebspunkte, eine Markierung den gewählten Betriebspunkt">
+          <defs>
+            <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4aa88b" stop-opacity=".22"/><stop offset="1" stop-color="#4aa88b" stop-opacity=".06"/></linearGradient>
+            <clipPath id="plotClip"><rect x="77" y="26" width="624" height="351" /></clipPath>
+          </defs>
+          <g id="grid"></g>
+          <g clip-path="url(#plotClip)">
+            <path id="area" fill="url(#areaFill)" stroke="none"></path>
+            <path id="nominal" fill="none" stroke="#919aa7" stroke-width="2.3" stroke-dasharray="9 6"></path>
+            <path id="curveCurrent" fill="none" stroke="#16825e" stroke-width="3.4" stroke-linejoin="round"></path>
+            <path id="curveVoltage" fill="none" stroke="#2458ab" stroke-width="3.4" stroke-linejoin="round"></path>
+            <path id="hGuide" fill="none" stroke="#9b9faa" stroke-dasharray="5 5" stroke-width="1.5"></path>
+            <path id="vGuide" fill="none" stroke="#9b9faa" stroke-dasharray="5 5" stroke-width="1.5"></path>
+            <circle id="pointHalo" r="10" fill="#fff" opacity=".9"></circle>
+            <circle id="point" r="6.5" fill="#16825e" stroke="#fff" stroke-width="1.5"></circle>
+          </g>
+          <g id="pointText"></g>
+          <text x="77" y="17" fill="#4f5c6c" font-size="14" font-family="system-ui, sans-serif">Lastmoment Mₗ [Nm]</text>
+          <text x="701" y="420" text-anchor="end" fill="#4f5c6c" font-size="14" font-family="system-ui, sans-serif">Lastdrehzahl nₗ [min⁻¹]</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><b style="border-color:#16825e"></b>Strombegrenzter Rand</span>
+        <span><b style="border-color:#2458ab"></b>Spannungsbegrenzter Rand</span>
+        <span id="refLegend"><b style="border-color:#919aa7;border-top-style:dashed"></b>Ohne Feldschwächung</span>
+        <span><b style="border-color:#bc663a"></b>Gewählter Betriebspunkt, falls unzulässig</span>
+      </div>
+      <p class="smallnote">Die Fläche zeigt Betriebspunkte, die bei <em>aktuell eingestelltem</em> Flussverhältnis beide Grenzen einhalten. Das ist kein gemessenes Motorkennfeld.</p>
+    </section>
+    <aside class="card">
+      <h2>Vorgaben ändern</h2>
+      <div class="presets"><button id="preset8" type="button">Übung 8 · max. Moment</button><button id="preset9" type="button">Übung 9 · max. Drehzahl</button></div>
+      <p class="smallnote" id="presetNote">Übung 9: Mₗ = 72 Nm; nₗ = 375 min⁻¹ dient als veränderbarer Startwert.</p>
+      <div class="control">
+        <div class="labelrow"><label for="load">Lastmoment Mₗ</label><span id="loadVal" class="readout"></span></div>
+        <input type="range" id="load" min="0" max="230" step="1" value="72">
+        <div class="range-ends"><span>0 Nm</span><span>230 Nm</span></div>
+      </div>
+      <div class="control">
+        <div class="labelrow"><label for="speed">Lastdrehzahl nₗ</label><span id="speedVal" class="readout"></span></div>
+        <input type="range" id="speed" min="0" max="1200" step="5" value="375">
+        <div class="range-ends"><span>0 min⁻¹</span><span>1200 min⁻¹</span></div>
+      </div>
+      <div class="control">
+        <div class="labelrow"><label for="gear">Getriebeübersetzung i</label><span id="gearVal" class="readout"></span></div>
+        <input type="range" id="gear" min="2" max="8" step="0.5" value="4">
+        <div class="range-ends"><span>2</span><span>8</span></div>
+      </div>
+      <div class="control">
+        <div class="labelrow"><label for="flux">Fluss Φ/Φₙ</label><span id="fluxVal" class="readout"></span></div>
+        <input type="range" id="flux" min="0.70" max="1.00" step="0.01" value="1.00">
+        <div class="range-ends"><span>0,70 · Φₙ (Feldschwächung)</span><span>1,00 · Φₙ</span></div>
+      </div>
+      <div class="param">
+        <strong>Feste Daten aus den Übungen</strong><br>
+        Motor-Nennpunkt: n<sub>M,N</sub> = 1500 min⁻¹; M<sub>N</sub> = 20 Nm; I<sub>N</sub> = 10 A<br>
+        U<sub>p,N</sub> = 155 V; X<sub>N</sub> = 4 Ω<br>
+        η = 0,9; I<sub>max</sub> = 15 A<br>
+        U<sub>DC</sub> = 250 V; D<sub>max</sub> = 0,8; <strong>U<sub>s,max</sub> = 200 V</strong>
+      </div>
+    </aside>
+  </div>
+  <section class="results" aria-live="polite">
+    <div class="stat"><div class="k">Motormoment Mₘ</div><div class="v" id="rTorque">–</div></div>
+    <div class="stat"><div class="k">Motordrehzahl nₘ</div><div class="v" id="rSpeed">–</div></div>
+    <div class="stat"><div class="k">Motorstrom I</div><div class="v" id="rCurrent">–</div></div>
+    <div class="stat"><div class="k">Benötigte Spannung Uₛ</div><div class="v" id="rVoltage">–</div></div>
+  </section>
+  <div class="status" id="status" role="status" aria-live="polite">Berechnung läuft …</div>
+  <section class="twocol" aria-label="Auslegungsergebnisse">
+    <div class="finding">
+      <h3>Übung 8 · Maximales Lastmoment bei aktueller Drehzahl</h3>
+      <div class="major" id="maxTorque">–</div>
+      <div class="minor" id="torqueConstraint">–</div>
+      <hr style="border:0;border-top:1px solid #e5e8ed;margin:10px 0">
+      <div class="minor" id="optimalFlux">–</div>
+    </div>
+    <div class="finding">
+      <h3>Übung 9 · Maximale Lastdrehzahl bei aktuellem Lastmoment</h3>
+      <div class="major" id="maxSpeed">–</div>
+      <div class="minor" id="speedConstraint">–</div>
+      <div class="meter-row"><span>I / I<sub>max</sub></span><div class="meter" id="currentBar"><div id="currentFill"></div></div><span id="currentPct">–</span></div>
+      <div class="meter-row"><span>D / D<sub>max</sub></span><div class="meter" id="dutyBar"><div id="dutyFill"></div></div><span id="dutyPct">–</span></div>
+    </div>
+  </section>
+  <section class="section card">
+    <h2>Rechenkette: Last → Getriebe → Motor → Grenzen</h2>
+    <div class="steps">
+      <div class="step"><h3>1. Last auf Motorseite</h3>
+        <div class="formula">n<sub>M</sub> = i · n<sub>L</sub></div>
+        <div class="formula">M<sub>M</sub> = M<sub>L</sub> / (i · η)</div>
+        <div class="value" id="calculation1">–</div>
+      </div>
+      <div class="step"><h3>2. Motorstrom &amp; Fluss</h3>
+        <div class="formula">I = I<sub>N</sub> · (M<sub>M</sub> / M<sub>N</sub>) · (Φ<sub>N</sub> / Φ)</div>
+        <div class="formula">U<sub>p</sub> = U<sub>p,N</sub> · (n<sub>M</sub> / n<sub>M,N</sub>) · (Φ / Φ<sub>N</sub>)</div>
+        <div class="value" id="calculation2">–</div>
+      </div>
+      <div class="step"><h3>3. Umrichter prüfen</h3>
+        <div class="formula">X = X<sub>N</sub> · n<sub>M</sub> / n<sub>M,N</sub></div>
+        <div class="formula">U<sub>s</sub> ≈ U<sub>p</sub> + XI; D ≈ U<sub>s</sub> / U<sub>DC</sub></div>
+        <div class="value" id="calculation3">–</div>
+      </div>
+    </div>
+    <p class="summary">Vereinfachungen wie in den Übungen: stationärer Motorbetrieb, M ∝ ΦI, U<sub>p</sub> ∝ nΦ, X ∝ n und skalare Spannungsnäherung U<sub>s</sub> ≈ U<sub>p</sub> + XI. Kein dq-Modell; keine Beschleunigungs- oder Wärmerechnung. Der Schieber „Fluss“ beschreibt den <em>wirksamen Fluss im vereinfachten Feldschwächmodell</em>, nicht eine Veränderung des Permanentmagnetflusses. Das Modell ist insbesondere bei n = 0 nur eine formale Grenzfallrechnung.</p>
+  </section>
+</main>
+<script>
+(function(){
+'use strict';
+const N={n:1500,M:20,I:10,Up:155,X:4}, eta=.9, maxI=15, maxD=.8, Udc=250, Umax=Udc*maxD, minFlux=.7;
+const q = id=>document.getElementById(id);
+const state = {load:72,speed:375,gear:4,flux:1};
+const plot = {l:77,t:26,w:624,h:351};
+const fmt = (a,d=1) => Number.isFinite(a) ? a.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}) : '–';
+const svgNS='http://www.w3.org/2000/svg';
+function make(tag,attrs,parent){const e=document.createElementNS(svgNS,tag);Object.keys(attrs).forEach(k=>e.setAttribute(k,attrs[k]));if(parent)parent.appendChild(e);return e;}
+function clear(el){while(el.firstChild)el.removeChild(el.firstChild)}
+function motor(load,speed,gear,flux){
+ const nm=gear*speed, mm=load/(gear*eta), I=N.I*mm/(N.M*flux), r=nm/N.n;
+ const up=N.Up*r*flux, X=N.X*r, us=up+X*I, duty=us/Udc;
+ return {nm,mm,I,r,up,X,us,duty};
+}
+function maxAtSpeed(speed,gear,flux){
+ const r=gear*speed/N.n;
+ const capVolt = r < 1e-10 ? Infinity : (Umax/r-N.Up*flux)/N.X;
+ const effective=Math.max(0,Math.min(maxI,capVolt));
+ const torque=gear*eta*N.M*flux*effective/N.I;
+ const source=capVolt>=maxI ? 'current' : 'voltage';
+ return {torque,source,capVolt,effective};
+}
+function optimalAtSpeed(speed,gear){
+ const r=gear*speed/N.n;
+ const candidates=[minFlux,1];
+ if(r>1e-10){const cross=(Umax/r-N.X*maxI)/N.Up;if(cross>=minFlux&&cross<=1)candidates.push(cross)}
+ let best={flux:minFlux,torque:-1};
+ for(const flux of candidates){const res=maxAtSpeed(speed,gear,flux);if(res.torque>best.torque+1e-9)best={flux,torque:res.torque}}
+ return best;
+}
+function maxSpeedAtLoad(load,gear,flux){
+ const mm=load/(gear*eta),I=N.I*mm/(N.M*flux);
+ if(I>maxI+1e-9)return null;
+ const denominator=N.Up*flux+N.X*I;
+ return {speed:N.n/gear * Umax/denominator, I};
+}
+function tickStep(max, count){const raw=max/count;const exp=Math.pow(10,Math.floor(Math.log10(raw||1)));
+ const n=raw/exp;return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*exp;}
+function draw(model,feasible){
+ const s=state;
+ const noLoadSpeed=N.n/ s.gear*Umax/(N.Up*s.flux);
+ const xMax=Math.max(250,Math.ceil(Math.max(noLoadSpeed*1.12,s.speed*1.12)/50)*50);
+ const yMax=Math.max(40,Math.ceil(Math.max(maxAtSpeed(0,s.gear,s.flux).torque*1.12,s.load*1.14)/20)*20);
+ const X=n=>plot.l+plot.w*n/xMax, Y=m=>plot.t+plot.h-plot.h*m/yMax, bottom=Y(0);
+ const grid=q('grid');clear(grid);
+ const xt=tickStep(xMax,6),yt=tickStep(yMax,5);
+ for(let val=0;val<=xMax+xt*.01;val+=xt){const x=X(val);
+  make('line',{x1:x,y1:plot.t,x2:x,y2:bottom,stroke:'#e8edf2','stroke-width':1},grid);
+  const label=make('text',{x,y:bottom+22,fill:'#647182','font-size':12,'text-anchor':'middle'},grid);label.textContent=fmt(val,0);
+ }
+ for(let val=0;val<=yMax+yt*.01;val+=yt){const y=Y(val);
+  make('line',{x1:plot.l,y1:y,x2:plot.l+plot.w,y2:y,stroke:'#e8edf2','stroke-width':1},grid);
+  const label=make('text',{x:plot.l-10,y:y+4,fill:'#647182','font-size':12,'text-anchor':'end'},grid);label.textContent=fmt(val,0);
+ }
+ make('path',{d:`M${plot.l},${plot.t}V${bottom}H${plot.l+plot.w}`,fill:'none',stroke:'#6b7787','stroke-width':1.5},grid);
+ function buildCurve(flux){
+  const path=[],cur=[],vol=[];let previous=null;
+  for(let k=0;k<=260;k++){
+   const n=xMax*k/260, res=maxAtSpeed(n,s.gear,flux), x=X(n),y=Y(res.torque);
+   path.push(`${k?'L':'M'}${x.toFixed(2)} ${y.toFixed(2)}`);
+   const cls=res.source==='current'?'current':'voltage';
+   if(cls!==previous){(cls==='current'?cur:vol).push(`M${x.toFixed(2)} ${y.toFixed(2)}`)}
+   else {(cls==='current'?cur:vol).push(`L${x.toFixed(2)} ${y.toFixed(2)}`)}
+   previous=cls;
+  }
+  return {line:path.join(' '),current:cur.join(' '),voltage:vol.join(' ')};
+ }
+ const c=buildCurve(s.flux);
+ q('area').setAttribute('d',`M ${X(0)} ${bottom} ${c.line.replace(/^M/,'L')} L${X(xMax)} ${bottom} Z`);
+ q('curveCurrent').setAttribute('d',c.current);
+ q('curveVoltage').setAttribute('d',c.voltage);
+ if(s.flux<.999){q('nominal').setAttribute('d',buildCurve(1).line);q('refLegend').hidden=false}
+ else {q('nominal').setAttribute('d','');q('refLegend').hidden=true}
+ const xp=X(s.speed),yp=Y(s.load);
+ q('vGuide').setAttribute('d',`M${xp} ${bottom}V${yp}`);
+ q('hGuide').setAttribute('d',`M${plot.l} ${yp}H${xp}`);
+ q('point').setAttribute('cx',xp);q('point').setAttribute('cy',yp);
+ q('pointHalo').setAttribute('cx',xp);q('pointHalo').setAttribute('cy',yp);
+ q('point').setAttribute('fill',feasible?'#16825e':'#bb6532');
+ const label=q('pointText');clear(label);
+ const lt=make('text',{x:Math.max(85,Math.min(675,xp+(xp>575?-14:13))),y:Math.max(22,yp-14),'text-anchor':xp>575?'end':'start',fill:feasible?'#12704f':'#965029','font-size':13,'font-weight':700},label);
+ lt.textContent=feasible?'Betriebspunkt ✓':'Betriebspunkt ✕';
+}
+function update(){
+ state.load=+q('load').value;state.speed=+q('speed').value;state.gear=+q('gear').value;state.flux=+q('flux').value;
+ const s=state, m=motor(s.load,s.speed,s.gear,s.flux), maxTor=maxAtSpeed(s.speed,s.gear,s.flux), opt=optimalAtSpeed(s.speed,s.gear), speedCap=maxSpeedAtLoad(s.load,s.gear,s.flux);
+ const okI=m.I<=maxI+1e-9,okV=m.us<=Umax+1e-9,feasible=okI&&okV;
+ q('loadVal').textContent=fmt(s.load,0)+' Nm';q('speedVal').textContent=fmt(s.speed,0)+' min⁻¹';q('gearVal').textContent=fmt(s.gear,1);q('fluxVal').textContent=fmt(s.flux,2);
+ q('rTorque').textContent=fmt(m.mm,2)+' Nm';q('rSpeed').textContent=fmt(m.nm,0)+' min⁻¹';q('rCurrent').textContent=fmt(m.I,2)+' A';q('rVoltage').textContent=fmt(m.us,2)+' V';
+ const status=q('status'); status.className='status'+(feasible?'':' bad');
+ status.textContent=feasible?'Betriebspunkt zulässig: Strom- und Spannungsgrenze eingehalten.':(!okI&&!okV?'Betriebspunkt unzulässig: Strom- und Spannungsgrenze überschritten.':!okI?'Betriebspunkt unzulässig: Stromgrenze überschritten.':'Betriebspunkt unzulässig: Spannungsgrenze überschritten.');
+ q('maxTorque').textContent=fmt(maxTor.torque,2)+' Nm';
+ q('torqueConstraint').textContent=maxTor.torque<=1e-8?'Bei dieser Drehzahl ist selbst ohne Last kein zulässiger Betrieb möglich.':'Begrenzend: '+(maxTor.source==='current'?'Strom Imax = 15 A':'Spannung Us,max = 200 V')+' · bei Φ/ΦN = '+fmt(s.flux,2);
+ q('optimalFlux').textContent='Mit optimaler Feldschwächung (0,70 ≤ Φ/ΦN ≤ 1,00): '+fmt(opt.torque,2)+' Nm bei Φ/ΦN = '+fmt(opt.flux,3)+'.';
+ q('maxSpeed').textContent=speedCap?fmt(speedCap.speed,2)+' min⁻¹':'Nicht erreichbar';
+ q('speedConstraint').textContent=speedCap?'Grenze: U_s = 200 V bei aktuellem Mₗ und Fluss; I = '+fmt(speedCap.I,2)+' A.':'Strombedarf überschreitet 15 A unabhängig von der Drehzahl.';
+ q('currentPct').textContent=fmt(100*m.I/maxI,0)+' %';q('dutyPct').textContent=fmt(100*m.duty/maxD,0)+' %';
+ for(const [outer,inner,fraction] of [['currentBar','currentFill',m.I/maxI],['dutyBar','dutyFill',m.duty/maxD]]){
+  q(outer).classList.toggle('over',fraction>1+1e-9);
+  q(inner).style.width=fmt(Math.max(0,Math.min(1,fraction))*100,2).replace(',','.')+'%';
+ }
+ q('calculation1').innerHTML='n<sub>M</sub> = '+fmt(m.nm,1)+' min⁻¹<br>M<sub>M</sub> = '+fmt(m.mm,2)+' Nm';
+ q('calculation2').innerHTML='I = '+fmt(m.I,2)+' A<br>U<sub>p</sub> = '+fmt(m.up,2)+' V';
+ q('calculation3').innerHTML='X = '+fmt(m.X,2)+' Ω<br>U<sub>s</sub> = '+fmt(m.us,2)+' V; D = '+fmt(m.duty,3);
+ draw(m,feasible);
+}
+function setPreset(key){
+ const values=key===8?{load:81,speed:375,gear:4,flux:1}:{load:72,speed:375,gear:4,flux:1};
+ for(const [k,v] of Object.entries(values))q(k).value=v;
+ q('presetNote').textContent=key===8?'Übung 8: nₗ = 375 min⁻¹; Mₗ = 81 Nm ist das errechnete Maximum ohne Feldschwächung (nicht vorgegeben).':'Übung 9: Mₗ = 72 Nm; nₗ = 375 min⁻¹ dient als veränderbarer Startwert.';
+ update();
+}
+for(const id of ['load','speed','gear','flux'])q(id).addEventListener('input',update);
+q('preset8').addEventListener('click',()=>setPreset(8));q('preset9').addEventListener('click',()=>setPreset(9));
+update();
+})();
+</script>
+</body>
+</html>

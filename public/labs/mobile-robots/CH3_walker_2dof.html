@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>2-DOF Walker: rho const. vs. z const.</title>
+<style>
+body{
+  font-family:Arial,Helvetica,sans-serif;
+  margin:20px;
+  color:#111;
+  background:#fff;
+}
+.controls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px 22px;
+  align-items:center;
+  padding:12px 14px;
+  border:1px solid #ddd;
+  border-radius:10px;
+  margin-bottom:16px;
+  background:#fafafa;
+}
+.controls label{font-size:14px}
+button{
+  font-size:14px;
+  padding:7px 14px;
+  border:1px solid #999;
+  border-radius:6px;
+  background:#fff;
+  cursor:pointer;
+}
+button:hover{background:#f2f2f2}
+input[type="range"]{width:280px;vertical-align:middle}
+.switch{
+  display:inline-flex;
+  border:1px solid #999;
+  border-radius:7px;
+  overflow:hidden;
+}
+.switch button{
+  border:0;
+  border-radius:0;
+  border-right:1px solid #bbb;
+}
+.switch button:last-child{border-right:0}
+.switch button.active{
+  background:#222;
+  color:#fff;
+}
+.values{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 20px;
+  align-items:center;
+  font-size:14px;
+  color:#444;
+}
+.panel{
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:10px;
+  background:#fff;
+}
+.panel h2{
+  text-align:center;
+  margin:6px 0 8px 0;
+  font-size:22px;
+}
+svg{width:100%;height:auto;background:#fff}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <button id="playBtn">Play</button>
+  <button id="resetBtn">Reset</button>
+
+  <label>
+    phase
+    <input id="phaseSlider" type="range" min="0" max="1000" value="0" />
+    <span id="phaseVal">0.000</span>
+  </label>
+
+  <div class="switch" aria-label="body path mode">
+    <button id="rhoBtn" class="active">ρ = const.</button>
+    <button id="zBtn">z = const.</button>
+  </div>
+
+  <label>
+    reference height h
+    <input id="heightSlider" type="range" min="0.70" max="1.10" value="0.95" step="0.01" />
+    <span id="heightSetVal">0.95 m</span>
+  </label>
+
+  <div class="values">
+    <span>current \(z_H\): <b id="heightVal">--</b> m</span>
+    <span>effective stance-leg length \(\rho\): <b id="rhoVal">--</b> m</span>
+    <span>stance knee \(q_2\): <b id="kneeVal">--</b>°</span>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>2-DOF walker</h2>
+  <svg id="svgWalker" viewBox="0 0 1120 430"></svg>
+</div>
+
+<script>
+(() => {
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.getElementById("svgWalker");
+
+  const playBtn=document.getElementById("playBtn");
+  const resetBtn=document.getElementById("resetBtn");
+  const phaseSlider=document.getElementById("phaseSlider");
+  const phaseVal=document.getElementById("phaseVal");
+
+  const rhoBtn=document.getElementById("rhoBtn");
+  const zBtn=document.getElementById("zBtn");
+
+  const heightSlider=document.getElementById("heightSlider");
+  const heightSetVal=document.getElementById("heightSetVal");
+
+  const heightVal=document.getElementById("heightVal");
+  const rhoVal=document.getElementById("rhoVal");
+  const kneeVal=document.getElementById("kneeVal");
+
+  // Fixed geometry
+  const l1=0.55;
+  const l2=0.55;
+  const L=l1+l2;
+  const d=0.55;
+  const clearance=0.16;
+  const totalSteps=7;
+  const playbackSpeed=0.75;
+
+  const marginX=70;
+  const groundYpx=350;
+  const scale=145;
+
+  let mode="rho";
+  let playing=false;
+  let u=0;
+  let lastT=null;
+
+  function add(parent,tag,attrs={}){
+    const el=document.createElementNS(NS,tag);
+    for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+    parent.appendChild(el);
+    return el;
+  }
+
+  function clear(){
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function wx(x){ return marginX+x*scale; }
+  function wy(y){ return groundYpx-y*scale; }
+
+  function splitPhase(){
+    if(u>=totalSteps) return {k:totalSteps-1,s:1};
+    const k=Math.max(0,Math.floor(u));
+    return {k,s:u-k};
+  }
+
+  function hRef(){
+    return parseFloat(heightSlider.value);
+  }
+
+  function maxHeightForZConst(){
+    return Math.sqrt(L*L-(d/2)*(d/2));
+  }
+
+  function updateHeightLimits(){
+    const maxH=(mode==="rho") ? L : maxHeightForZConst();
+    heightSlider.max=maxH.toFixed(3);
+
+    if(parseFloat(heightSlider.value)>maxH){
+      heightSlider.value=maxH.toFixed(3);
+    }
+  }
+
+  function hipX(k,s){
+    return k*d-d/2+d*s;
+  }
+
+  function hipPosition(k,s){
+    const x=hipX(k,s);
+    const dx=x-k*d;
+    const h=hRef();
+
+    if(mode==="rho"){
+      // Here h is the mid-stance height.
+      // At mid-stance dx=0, hence rho = z_H = h.
+      return {
+        x:x,
+        y:Math.sqrt(Math.max(0,h*h-dx*dx))
+      };
+    }
+
+    // Here h is the constant body height.
+    return {x:x,y:h};
+  }
+
+  function swingFootPosition(k,s){
+    return {
+      x:(k-1)*d+2*d*s,
+      y:clearance*Math.sin(Math.PI*s)*Math.sin(Math.PI*s)
+    };
+  }
+
+  function kneeFromIK(H,F,forward=true){
+    const vx=F.x-H.x;
+    const vy=F.y-H.y;
+    const r0=Math.hypot(vx,vy);
+
+    const rMin=Math.abs(l1-l2);
+    const rMax=l1+l2;
+    const eps=1e-7;
+
+    if(r0>rMax+eps || r0<rMin-eps) return null;
+
+    const r=Math.min(rMax,Math.max(rMin+1e-12,r0));
+    const denom=Math.max(r0,1e-12);
+    const ux=vx/denom;
+    const uy=vy/denom;
+
+    const a=(l1*l1-l2*l2+r*r)/(2*r);
+    const hh=Math.sqrt(Math.max(0,l1*l1-a*a));
+
+    const bx=H.x+a*ux;
+    const by=H.y+a*uy;
+
+    const nx=-uy;
+    const ny=ux;
+
+    const K1={x:bx+hh*nx,y:by+hh*ny};
+    const K2={x:bx-hh*nx,y:by-hh*ny};
+
+    if(forward) return (K1.x>=K2.x)?K1:K2;
+    return (K1.x<K2.x)?K1:K2;
+  }
+
+  function effectiveLegLength(H,F){
+    return Math.hypot(F.x-H.x,F.y-H.y);
+  }
+
+  function kneeAngleFromRho(r){
+    const c=(r*r-l1*l1-l2*l2)/(2*l1*l2);
+    const cc=Math.max(-1,Math.min(1,c));
+    return Math.acos(cc)*180/Math.PI;
+  }
+
+  function ground(){
+    const xmax=totalSteps*d+1.5;
+    add(svg,"line",{
+      x1:wx(0),y1:wy(0),x2:wx(xmax),y2:wy(0),
+      stroke:"#111","stroke-width":3
+    });
+    for(let x=0;x<=xmax;x+=0.18){
+      add(svg,"line",{
+        x1:wx(x),y1:wy(0),x2:wx(x+0.08),y2:wy(-0.08),
+        stroke:"#777","stroke-width":1
+      });
+    }
+  }
+
+  function contacts(currentK){
+    for(let i=0;i<=totalSteps;i++){
+      const past=i<currentK;
+      const current=i===currentK;
+      const next=i===currentK+1;
+      add(svg,"circle",{
+        cx:wx(i*d),cy:wy(0),
+        r:current?8:5,
+        fill:current?"#f59e0b":(past?"#bdbdbd":"#efefef"),
+        stroke:current?"#c2410c":"#777",
+        "stroke-width":current?2:1.5,
+        opacity:(past||current||next)?1:0.35
+      });
+    }
+  }
+
+  function accumulatedHipPath(){
+    const {k,s}=splitPhase();
+    const pts=[];
+
+    for(let step=0;step<=k;step++){
+      const localEnd=(step<k)?1:s;
+      const n=Math.max(2,Math.ceil(60*localEnd));
+      for(let i=0;i<=n;i++){
+        const si=localEnd*i/n;
+        pts.push(hipPosition(step,si));
+      }
+    }
+
+    if(pts.length<2) return;
+
+    let path="";
+    pts.forEach((p,i)=>{
+      path+=(i===0?"M ":" L ")+wx(p.x)+" "+wy(p.y);
+    });
+
+    add(svg,"path",{
+      d:path,
+      fill:"none",
+      stroke:"#2563eb",
+      "stroke-width":3,
+      "stroke-dasharray":"9 7"
+    });
+  }
+
+  function swingPath(k,sNow){
+    let path="";
+    const n=90;
+    for(let i=0;i<=n;i++){
+      const s=sNow*i/n;
+      const F=swingFootPosition(k,s);
+      path+=(i===0?"M ":" L ")+wx(F.x)+" "+wy(F.y);
+    }
+    add(svg,"path",{
+      d:path,
+      fill:"none",
+      stroke:"#8a8a8a",
+      "stroke-width":2
+    });
+  }
+
+  function drawLeg(H,K,F){
+    add(svg,"line",{
+      x1:wx(H.x),y1:wy(H.y),
+      x2:wx(K.x),y2:wy(K.y),
+      stroke:"#111","stroke-width":8
+    });
+    add(svg,"line",{
+      x1:wx(K.x),y1:wy(K.y),
+      x2:wx(F.x),y2:wy(F.y),
+      stroke:"#111","stroke-width":8
+    });
+    add(svg,"circle",{
+      cx:wx(K.x),cy:wy(K.y),r:9,
+      fill:"#ddd",stroke:"#333","stroke-width":2
+    });
+  }
+
+  function redraw(){
+    clear();
+    updateHeightLimits();
+
+    const {k,s}=splitPhase();
+    const H=hipPosition(k,s);
+    const Fs={x:k*d,y:0};
+    const Fw=swingFootPosition(k,s);
+
+    const Ks=kneeFromIK(H,Fs,true);
+    const Kw=kneeFromIK(H,Fw,true);
+
+    ground();
+    accumulatedHipPath();
+    contacts(k);
+    swingPath(k,s);
+
+    if(Ks) drawLeg(H,Ks,Fs);
+    if(Kw) drawLeg(H,Kw,Fw);
+
+    add(svg,"circle",{
+      cx:wx(H.x),cy:wy(H.y),r:17,
+      fill:"#ddd",stroke:"#333","stroke-width":2.5
+    });
+
+    add(svg,"circle",{
+      cx:wx(Fw.x),cy:wy(Fw.y),r:7,
+      fill:"#fff",stroke:"#555","stroke-width":2
+    });
+
+    const rho=effectiveLegLength(H,Fs);
+    const q2=kneeAngleFromRho(rho);
+
+    heightSetVal.textContent=hRef().toFixed(2)+" m";
+    heightVal.textContent=H.y.toFixed(3);
+    rhoVal.textContent=rho.toFixed(3);
+    kneeVal.textContent=q2.toFixed(1);
+
+    phaseVal.textContent=u.toFixed(3);
+    phaseSlider.value=Math.round((u/totalSteps)*1000);
+
+    rhoBtn.classList.toggle("active",mode==="rho");
+    zBtn.classList.toggle("active",mode==="z");
+  }
+
+  function animate(ts){
+    if(!playing) return;
+    if(lastT===null) lastT=ts;
+    const dt=(ts-lastT)/1000;
+    lastT=ts;
+
+    u+=playbackSpeed*dt;
+    if(u>=totalSteps){
+      u=totalSteps;
+      playing=false;
+      playBtn.textContent="Play";
+    }
+
+    redraw();
+    if(playing) requestAnimationFrame(animate);
+  }
+
+  playBtn.addEventListener("click",()=>{
+    playing=!playing;
+    playBtn.textContent=playing?"Pause":"Play";
+    lastT=null;
+
+    if(playing){
+      if(u>=totalSteps) u=0;
+      requestAnimationFrame(animate);
+    }
+  });
+
+  resetBtn.addEventListener("click",()=>{
+    playing=false;
+    playBtn.textContent="Play";
+    u=0;
+    lastT=null;
+    redraw();
+  });
+
+  phaseSlider.addEventListener("input",()=>{
+    playing=false;
+    playBtn.textContent="Play";
+    u=totalSteps*(parseInt(phaseSlider.value,10)/1000);
+    redraw();
+  });
+
+  rhoBtn.addEventListener("click",()=>{
+    mode="rho";
+    updateHeightLimits();
+    redraw();
+  });
+
+  zBtn.addEventListener("click",()=>{
+    mode="z";
+    updateHeightLimits();
+    redraw();
+  });
+
+  heightSlider.addEventListener("input",redraw);
+
+  redraw();
+})();
+</script>
+</body>
+</html>

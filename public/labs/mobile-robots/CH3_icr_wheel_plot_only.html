@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Momentanpol und Radausrichtung</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .frame {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+    }
+    svg {
+      width: min(100vw, 100vh);
+      height: min(100vw, 100vh);
+      display: block;
+      touch-action: none;
+      user-select: none;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+<div class="frame">
+  <svg id="plot" viewBox="0 0 760 760" aria-label="Interaktive ICR-Darstellung"></svg>
+</div>
+
+<script>
+(() => {
+  const svg = document.getElementById('plot');
+
+  const W = 760, H = 760;
+  const margin = { left: 70, right: 30, top: 30, bottom: 55 };
+  const xmin = -2, xmax = 2, ymin = -2, ymax = 2;
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  const state = {
+    icr: { x: 1.0, y: 0.5 },
+    dragging: false,
+  };
+
+  const body = {
+    xMin: -1.0,
+    xMax: 1.0,
+    yMin: -0.5,
+    yMax: 0.5,
+    center: { x: 0, y: 0 }
+  };
+
+  const wheelCenters = [
+    { x: -1.5, y: 1.0 },
+    { x:  1.5, y: 1.0 },
+    { x: -1.5, y: -1.0 },
+    { x:  1.5, y: -1.0 }
+  ];
+
+  const wheelSize = { length: 0.52, width: 0.22 };
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function xScale(x) { return margin.left + (x - xmin) / (xmax - xmin) * plotW; }
+  function yScale(y) { return margin.top + (ymax - y) / (ymax - ymin) * plotH; }
+  function xInv(px) { return xmin + (px - margin.left) / plotW * (xmax - xmin); }
+  function yInv(py) { return ymax - (py - margin.top) / plotH * (ymax - ymin); }
+
+  function el(name, attrs = {}, parent = svg) {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function clear() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function lineFromPointAngleThroughBounds(point, angle) {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const candidates = [];
+
+    function pushIfValid(t, x, y) {
+      if (x >= xmin - 1e-9 && x <= xmax + 1e-9 && y >= ymin - 1e-9 && y <= ymax + 1e-9) {
+        candidates.push({ t, x, y });
+      }
+    }
+
+    if (Math.abs(dx) > 1e-9) {
+      let t = (xmin - point.x) / dx;
+      pushIfValid(t, xmin, point.y + t * dy);
+      t = (xmax - point.x) / dx;
+      pushIfValid(t, xmax, point.y + t * dy);
+    }
+    if (Math.abs(dy) > 1e-9) {
+      let t = (ymin - point.y) / dy;
+      pushIfValid(t, point.x + t * dx, ymin);
+      t = (ymax - point.y) / dy;
+      pushIfValid(t, point.x + t * dx, ymax);
+    }
+
+    if (candidates.length < 2) return null;
+    candidates.sort((a, b) => a.t - b.t);
+    let p1 = candidates[0];
+    let p2 = candidates[candidates.length - 1];
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
+
+  function drawGrid() {
+    const g = el('g');
+
+    for (let x = xmin; x <= xmax + 1e-9; x += 0.5) {
+      el('line', {
+        x1: xScale(x), y1: yScale(ymin), x2: xScale(x), y2: yScale(ymax),
+        stroke: x === 0 ? '#9aa1aa' : '#d6d9de',
+        'stroke-width': x === 0 ? 1.5 : 1
+      }, g);
+    }
+    for (let y = ymin; y <= ymax + 1e-9; y += 0.5) {
+      el('line', {
+        x1: xScale(xmin), y1: yScale(y), x2: xScale(xmax), y2: yScale(y),
+        stroke: y === 0 ? '#9aa1aa' : '#d6d9de',
+        'stroke-width': y === 0 ? 1.5 : 1
+      }, g);
+    }
+
+    el('rect', {
+      x: xScale(xmin), y: yScale(ymax),
+      width: xScale(xmax) - xScale(xmin),
+      height: yScale(ymin) - yScale(ymax),
+      fill: 'none', stroke: '#c7ccd4', 'stroke-width': 1.2
+    }, g);
+
+    for (let x = xmin; x <= xmax + 1e-9; x += 0.5) {
+      el('text', {
+        x: xScale(x), y: yScale(ymin) + 28,
+        'font-size': 12, 'text-anchor': 'middle', fill: '#4b5563'
+      }, g).textContent = x.toFixed(1);
+    }
+    for (let y = ymin; y <= ymax + 1e-9; y += 0.5) {
+      el('text', {
+        x: xScale(xmin) - 10, y: yScale(y) + 4,
+        'font-size': 12, 'text-anchor': 'end', fill: '#4b5563'
+      }, g).textContent = y.toFixed(1);
+    }
+
+    el('text', {
+      x: (xScale(xmin) + xScale(xmax)) / 2,
+      y: H - 14,
+      'font-size': 16,
+      'text-anchor': 'middle', fill: '#374151', 'font-weight': 600
+    }, g).textContent = 'X';
+
+    const yLabel = el('text', {
+      x: 18, y: (yScale(ymin) + yScale(ymax)) / 2,
+      'font-size': 16, fill: '#374151', 'font-weight': 600,
+      transform: `rotate(-90, 18, ${(yScale(ymin) + yScale(ymax)) / 2})`,
+      'text-anchor': 'middle'
+    }, g);
+    yLabel.textContent = 'Y';
+
+    el('text', {
+      x: W / 2, y: 16,
+      'font-size': 18, 'font-weight': 600,
+      'text-anchor': 'middle', fill: '#374151'
+    }, g).textContent = 'Top View of Robot with Body and Wheels';
+  }
+
+  function drawArrowMarkerDefs() {
+    const defs = el('defs');
+    const marker = el('marker', {
+      id: 'arrowHead', viewBox: '0 0 10 10', refX: '8.5', refY: '5',
+      markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse'
+    }, defs);
+    el('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: '#16a34a' }, marker);
+  }
+
+  function drawBody() {
+    el('rect', {
+      x: xScale(body.xMin),
+      y: yScale(body.yMax),
+      width: xScale(body.xMax) - xScale(body.xMin),
+      height: yScale(body.yMin) - yScale(body.yMax),
+      fill: 'none', stroke: '#1d4ed8', 'stroke-width': 2.2
+    });
+
+    el('circle', {
+      cx: xScale(0), cy: yScale(0), r: 5.5,
+      fill: '#1d4ed8'
+    });
+  }
+
+  function drawWheel(center, angle) {
+    const px = xScale(center.x);
+    const py = yScale(center.y);
+    const lenPx = (wheelSize.length / (xmax - xmin)) * plotW;
+    const widPx = (wheelSize.width / (ymax - ymin)) * plotH;
+    const deg = angle * 180 / Math.PI;
+
+    const group = el('g', {
+      transform: `translate(${px}, ${py}) rotate(${-deg})`
+    });
+    el('rect', {
+      x: -lenPx / 2, y: -widPx / 2,
+      width: lenPx, height: widPx,
+      fill: 'white', stroke: '#ff0000', 'stroke-width': 5,
+      rx: 2, ry: 2
+    }, group);
+  }
+
+  function drawGuidesAndWheels() {
+    wheelCenters.forEach((wc) => {
+      const rx = wc.x - state.icr.x;
+      const ry = wc.y - state.icr.y;
+      const radialAngle = Math.atan2(ry, rx);
+      const tangentAngle = radialAngle + Math.PI / 2;
+
+      const seg = lineFromPointAngleThroughBounds(wc, radialAngle);
+      if (seg) {
+        el('line', {
+          x1: xScale(seg.x1), y1: yScale(seg.y1),
+          x2: xScale(seg.x2), y2: yScale(seg.y2),
+          stroke: '#b0b0b0', 'stroke-width': 2,
+          'stroke-dasharray': '8 6'
+        });
+      }
+      drawWheel(wc, tangentAngle);
+    });
+  }
+
+  function drawICRAndVelocity() {
+    const icr = state.icr;
+
+    el('line', {
+      x1: xScale(0), y1: yScale(0), x2: xScale(icr.x), y2: yScale(icr.y),
+      stroke: '#818cf8', 'stroke-width': 2.2, 'stroke-dasharray': '6 5', opacity: 0.85
+    });
+
+    el('circle', {
+      cx: xScale(icr.x), cy: yScale(icr.y), r: 5.5,
+      fill: '#16a34a', cursor: 'grab'
+    });
+
+    const vx = icr.y;
+    const vy = -icr.x;
+    el('line', {
+      x1: xScale(0), y1: yScale(0),
+      x2: xScale(vx), y2: yScale(vy),
+      stroke: '#16a34a', 'stroke-width': 2.5,
+      'marker-end': 'url(#arrowHead)', opacity: 0.95
+    });
+  }
+
+  function redraw() {
+    clear();
+    drawArrowMarkerDefs();
+    drawGrid();
+    drawBody();
+    drawGuidesAndWheels();
+    drawICRAndVelocity();
+  }
+
+  function pointerToWorld(evt) {
+    const rect = svg.getBoundingClientRect();
+    const px = (evt.clientX - rect.left) / rect.width * W;
+    const py = (evt.clientY - rect.top) / rect.height * H;
+    return {
+      x: clamp(xInv(px), xmin, xmax),
+      y: clamp(yInv(py), ymin, ymax)
+    };
+  }
+
+  function distSq(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  }
+
+  svg.addEventListener('pointerdown', (evt) => {
+    const w = pointerToWorld(evt);
+    if (distSq(w, state.icr) < 0.12) {
+      state.dragging = true;
+      svg.setPointerCapture(evt.pointerId);
+    } else {
+      state.icr = w;
+      redraw();
+    }
+  });
+
+  svg.addEventListener('pointermove', (evt) => {
+    if (!state.dragging) return;
+    state.icr = pointerToWorld(evt);
+    redraw();
+  });
+
+  function stopDrag(evt) {
+    if (state.dragging) {
+      state.dragging = false;
+      try { svg.releasePointerCapture(evt.pointerId); } catch (_) {}
+    }
+  }
+  svg.addEventListener('pointerup', stopDrag);
+  svg.addEventListener('pointercancel', stopDrag);
+
+  redraw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A* – Interaktive Suche</title>
+<style>
+:root{--blue:#2563eb;--green:#16a34a;--orange:#f59e0b;--dark:#263449;--muted:#708096;--bg:#f5f7fb;--stroke:#dce2e9}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--dark)}
+main{max-width:1390px;margin:auto;padding:14px}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-bottom:12px}.tag{font-weight:750;font-size:17px;margin-right:auto;white-space:nowrap}
+button,select{appearance:none;background:white;border:1px solid #ccd5e1;color:var(--dark);border-radius:9px;padding:9px 13px;font:inherit;cursor:pointer;min-height:40px}button:hover,select:hover{background:#eef4ff}button:disabled{opacity:.36;cursor:default}button.primary{background:#2563eb;color:white;border-color:#2563eb}button.primary:hover{background:#1d4ed8}button.active{background:#e7f0ff;border-color:#8cafe9}label.toggle{display:flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap}
+.layout{display:grid;grid-template-columns:minmax(440px,1.05fr) minmax(430px,.95fr);gap:13px;min-height:520px}.pane{background:white;border:1px solid var(--stroke);border-radius:12px;overflow:hidden}.graph{display:flex;align-items:center;justify-content:center;padding:16px;min-height:530px}svg{width:100%;max-height:calc(100vh - 155px);min-height:440px;display:block;touch-action:manipulation}
+.tablepane{padding:14px 15px;display:flex;flex-direction:column;gap:11px;min-width:0}.status{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:13px;color:var(--muted);min-height:26px}.status strong{color:var(--dark);font-size:16px;font-variant-numeric:tabular-nums}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#576275}.legend span{display:flex;align-items:center;gap:5px}.dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+.scroller{overflow:auto;max-height:min(65vh,690px);min-height:350px;border:1px solid #e3e8ef;border-radius:8px}table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}th,td{padding:10px 11px;border-bottom:1px solid #e6ebf2;text-align:right}th:first-child,td:first-child{text-align:left}th:nth-child(2),td:nth-child(2){text-align:left}thead{position:sticky;top:0;background:#f0f4f9;z-index:2}tr.current{background:#e9f2ff}tr.neighbor{background:#fbfcff}tr.blocked{color:#8a95a4}tr:nth-child(n+2):hover{background:#f2f8ff}.foot{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px;min-height:28px;align-items:center}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+@media(max-width:950px){.layout{grid-template-columns:1fr}.graph{min-height:370px}svg{max-height:65vh;min-height:330px}.scroller{max-height:45vh;min-height:200px}}
+</style></head>
+<body><main>
+<div class="toolbar">
+  <span class="tag">A*</span>
+  <select id="scenario" aria-label="Szenario"><option value="exercise">Einfach 4x4</option><option value="demo">Freies Raster (12 × 9)</option></select>
+  <label class="toggle"><input type="checkbox" id="dijkstra"> h = 0 (Dijkstra)</label>
+  <button id="reset" title="Reset">↺</button><button id="back" title="Ein Schritt zurück">◀</button><button id="next" class="primary" title="Einen Knoten expandieren">▶</button><button id="auto" title="Automatischer Ablauf">▷▷ Auto</button>
+</div>
+<div class="layout">
+  <div class="pane graph"><svg id="map" role="img" aria-label="A*-Raster mit Start, Ziel, Hindernissen und offenen bzw. geschlossenen Knoten" viewBox="0 0 650 630"></svg></div>
+  <div class="pane tablepane">
+    <div class="status"><strong id="step">Expansion 0</strong><span id="selected">selected: –</span></div>
+    <div class="legend"><span><i class="dot" style="background:#e8b65b"></i>open</span><span><i class="dot" style="background:#aab8cc"></i>closed</span><span><i class="dot" style="background:#3986f7"></i>selected</span><span><i class="dot" style="background:#3ac58b"></i>path</span><span><i class="dot" style="background:#344154"></i>OBS</span></div>
+    <div class="scroller"><table><thead><tr><th>Zelle (r,c)</th><th>Status</th><th>g</th><th>h</th><th>f</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="foot"><span id="count">open: 1 · closed: 0</span><span id="hint">Ziel: freie Zelle anklicken · ▶ starten</span></div>
+  </div>
+</div>
+</main>
+<script>
+(()=>{'use strict';
+const NS='http://www.w3.org/2000/svg', svg=document.getElementById('map'), rows=document.getElementById('rows');
+const scenario=document.getElementById('scenario'), dijkstra=document.getElementById('dijkstra');
+const bBack=document.getElementById('back'), bNext=document.getElementById('next'), bAuto=document.getElementById('auto'),bReset=document.getElementById('reset');
+let cfg,trace=[],index=0,timer=null;
+const clone=x=>JSON.parse(JSON.stringify(x));
+const key=(r,c)=>`${r},${c}`, unpack=k=>k.split(',').map(Number), format=n=>Number.isFinite(n)?(Number.isInteger(n)?''+n:n.toFixed(2)):'–';
+function makeConfig(){
+ if(scenario.value==='exercise') return {R:4,C:4,start:[0,0],goal:[3,0],walls:new Set(['1,1']),costs:{'1,0':2}};
+ return {R:9,C:12,start:[1,1],goal:[7,10],walls:new Set(['0,5','1,5','2,5','3,5','4,5','5,5','6,5','6,4','6,3','3,8','4,8','5,8','2,9','2,10']),costs:{}};
+}
+function heuristic(k){if(dijkstra.checked)return 0;const [r,c]=unpack(k);return Math.abs(r-cfg.goal[0])+Math.abs(c-cfg.goal[1]);}
+function sorter(a,b,rec){const A=rec[a],B=rec[b];return (A.g+A.h)-(B.g+B.h)||A.h-B.h||Number(unpack(a)[0])-Number(unpack(b)[0])||Number(unpack(a)[1])-Number(unpack(b)[1]);}
+function buildTrace(){
+ const first=key(...cfg.start),goal=key(...cfg.goal);
+ const rec={[first]:{g:0,h:heuristic(first),parent:null}},open=[first],closed=[];
+ const snap=(current=null,table=null,done=false)=>({rec:clone(rec),open:[...open],closed:[...closed],current,table:clone(table||[{k:first,status:'open',g:0,h:heuristic(first),f:heuristic(first)}]),done});
+ const out=[snap()];
+ for(let it=0;it<cfg.R*cfg.C+1 && open.length;it++){
+  open.sort((a,b)=>sorter(a,b,rec));const current=open.shift(); closed.push(current);
+  const table=[{k:current,status:'selected'}];
+  if(current===goal){out.push(snap(current,table,true));break;}
+  const [r,c]=unpack(current), neighbors=[[r+1,c],[r,c+1],[r-1,c],[r,c-1]], seen=new Set([current]);
+  for(const [nr,nc] of neighbors){
+   if(nr<0||nr>=cfg.R||nc<0||nc>=cfg.C)continue;
+   const k=key(nr,nc);seen.add(k);
+   if(cfg.walls.has(k)){table.push({k,status:'OBS'});continue;}
+   if(closed.includes(k)){table.push({k,status:'CLOSED'});continue;}
+   const cand=rec[current].g+(cfg.costs[k]??1);
+   if(!rec[k]||cand<rec[k].g-1e-9){rec[k]={g:cand,h:heuristic(k),parent:current};if(!open.includes(k))open.push(k);}
+   table.push({k,status:'open',...rec[k],f:rec[k].g+rec[k].h});
+  }
+  for(const k of open.slice().sort((a,b)=>sorter(a,b,rec))){if(!seen.has(k))table.push({k,status:'open',...rec[k],f:rec[k].g+rec[k].h});}
+  out.push(snap(current,table));
+ }
+ if(out.length && !out.at(-1).done && !out.at(-1).open.length)out.at(-1).done=true;
+ trace=out;index=0;render();
+}
+function create(name,attrs={},parent=svg){let e=document.createElementNS(NS,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,''+v);parent.appendChild(e);return e;}
+function text(value,props,parent){create('text',{...props,'font-family':'system-ui,Arial,sans-serif'},parent).textContent=value;}
+function draw(){svg.replaceChildren();const s=trace[index];let cw=Math.min(108,545/cfg.C,535/cfg.R),w=cfg.C*cw,h=cfg.R*cw,ox=(650-w)/2,oy=(630-h)/2;
+ const cell=(k)=>{const [r,c]=unpack(k);return {x:ox+c*cw,y:oy+(cfg.R-1-r)*cw};};
+ const selected=s.current,done=s.current===key(...cfg.goal), path=[];
+ if(done){let k=selected;while(k!=null){path.push(k);k=s.rec[k].parent;}}
+ const pathSet=new Set(path);
+ for(let r=0;r<cfg.R;r++)for(let c=0;c<cfg.C;c++){
+  const k=key(r,c),p=cell(k),wall=cfg.walls.has(k);let fill=wall?'#344154':'#fff',stroke='#d4dce5';
+  if(s.closed.includes(k))fill='#cad3df';if(s.open.includes(k))fill='#ffdf97';if(pathSet.has(k))fill='#a5eac5';if(k===selected)fill='#65abfa';
+  create('rect',{x:p.x,y:p.y,width:cw,height:cw,fill,stroke,'stroke-width':1.5,rx:3,'data-cell':k,style:'cursor:crosshair'});
+  if(cw>=40 && !wall){text(k,{x:p.x+5,y:p.y+13,'font-size':Math.min(11,cw*.2),fill:'#708096'});}
+  if(cfg.costs[k]){text('×'+cfg.costs[k],{x:p.x+cw-5,y:p.y+cw-6,'font-size':13,'font-weight':650,'text-anchor':'end',fill:'#ab6425'});}
+  if(s.open.includes(k) && cw>=35 && s.rec[k])text('f='+format(s.rec[k].g+s.rec[k].h),{x:p.x+cw/2,y:p.y+cw*.68,'font-size':Math.min(13,cw*.24),'text-anchor':'middle','font-weight':700,fill:'#8b5717'});
+ }
+ if(path.length>1){let pts=path.map(k=>{let p=cell(k);return `${p.x+cw/2},${p.y+cw/2}`}).join(' ');create('polyline',{points:pts,stroke:'#089c61','stroke-width':Math.max(3,cw*.1),fill:'none','stroke-linejoin':'round','stroke-linecap':'round','pointer-events':'none'});}
+ for(const [k,mark,col] of [[key(...cfg.start),'S','#065f46'],[key(...cfg.goal),'G','#be123c']]){
+  let p=cell(k);create('circle',{cx:p.x+cw/2,cy:p.y+cw/2,r:Math.min(cw*.23,15),fill:col,'pointer-events':'none'});text(mark,{x:p.x+cw/2,y:p.y+cw/2+4,'font-size':Math.min(cw*.25,14),'font-weight':800,'text-anchor':'middle',fill:'white','pointer-events':'none'});
+ }
+
+}
+function render(){if(!trace.length)return;const s=trace[index];draw();
+ document.getElementById('step').textContent='Expansion '+index;
+ document.getElementById('selected').textContent='selected: '+(s.current?'('+s.current+')':'–');
+ rows.replaceChildren();
+ for(const row of s.table){let tr=document.createElement('tr');tr.className=row.status==='selected'?'current':row.status==='open'?'neighbor':'blocked';
+  const rec=s.rec[row.k];const vals=['('+row.k+')',row.status,rec&&!['OBS','CLOSED'].includes(row.status)?format(rec.g):'—',rec&&!['OBS','CLOSED'].includes(row.status)?format(rec.h):'—',rec&&!['OBS','CLOSED'].includes(row.status)?format(rec.g+rec.h):'—'];
+  for(const v of vals){let td=document.createElement('td');td.textContent=v;tr.appendChild(td);}rows.appendChild(tr);
+ }
+ document.getElementById('count').textContent=`open: ${s.open.length} · closed: ${s.closed.length}`;
+ document.getElementById('hint').textContent=s.current===key(...cfg.goal)?`Ziel gefunden · g = ${format(s.rec[s.current].g)}`:index===trace.length-1?'Suche beendet':scenario.value==='demo'?'Klick: Ziel · Shift+Klick: Hindernis':'Klick: Ziel setzen · ▶ startet Suche';
+ bBack.disabled=index===0;bNext.disabled=index>=trace.length-1;
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}bAuto.textContent='▷▷ Auto';bAuto.classList.remove('active');}
+function reset(){stop();buildTrace();}
+function changeScenario(){stop();cfg=makeConfig();buildTrace();}
+function next(){if(index<trace.length-1){index++;render();}else stop();}
+bNext.addEventListener('click',()=>{stop();next();});bBack.addEventListener('click',()=>{stop();if(index>0){index--;render();}});
+bReset.addEventListener('click',reset);scenario.addEventListener('change',changeScenario);dijkstra.addEventListener('change',reset);
+bAuto.addEventListener('click',()=>{if(timer){stop();return;}if(index===trace.length-1)index=0;timer=setInterval(()=>{if(index===trace.length-1){stop();return;}next()},750);bAuto.textContent='Ⅱ Pause';bAuto.classList.add('active');render();});
+svg.addEventListener('click',e=>{const el=e.target.closest('[data-cell]');if(!el)return;const k=el.dataset.cell;if(k===key(...cfg.start))return;
+  if(e.shiftKey&&scenario.value==='demo'){if(k===key(...cfg.goal))return;stop();if(cfg.walls.has(k))cfg.walls.delete(k);else cfg.walls.add(k);buildTrace();return;}
+  if(cfg.walls.has(k))return;stop();cfg.goal=unpack(k);buildTrace();});
+window.__astarDebug=()=>({scenario:scenario.value,step:index,total:trace.length,config:{R:cfg.R,C:cfg.C,start:cfg.start,goal:cfg.goal,walls:[...cfg.walls]},snapshot:clone(trace[index]),trace:clone(trace)});
+changeScenario();
+})();
+</script></body></html>

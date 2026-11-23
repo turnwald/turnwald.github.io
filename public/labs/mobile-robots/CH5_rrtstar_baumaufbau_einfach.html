@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RRT* – Baumaufbau</title>
+<style>
+:root{--ink:#25364b;--muted:#65758c;--border:#dce3ec;--blue:#3579b9;--green:#169764;--orange:#e5a121;--red:#e34545}
+*{box-sizing:border-box}body{margin:0;background:white;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:14px}
+main{width:min(96vw,890px);margin:14px auto}
+.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.title{font-size:19px;font-weight:750;flex:1;white-space:nowrap}
+button{background:#fff;color:#31445b;border:1px solid #cbd5e1;border-radius:9px;padding:9px 13px;min-height:39px;cursor:pointer;font:inherit}
+button:hover:not(:disabled){background:#eff5fb}button:disabled{opacity:.35;cursor:default}
+button.primary{background:#286ad2;border-color:#286ad2;color:#fff}
+button.primary:hover:not(:disabled){background:#1c56af}
+button.running{background:#e9f3fc}
+svg{width:100%;height:auto;display:block;border:1px solid var(--border);border-radius:12px;touch-action:manipulation;cursor:crosshair;background:#fff}
+.footer{margin-top:9px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.phase{font-weight:700;color:#3b516b;font-size:13px}
+.hint{color:var(--muted);font-size:12px}
+.key{display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:#63758b;font-size:12px}
+.key span{display:inline-flex;gap:5px;align-items:center}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+@media(max-width:700px){main{margin:6px auto}.toolbar{gap:5px}.title{font-size:17px}.footer{gap:8px}}
+</style>
+</head>
+<body><main>
+ <div class="toolbar">
+  <span class="title">RRT* · Baumaufbau</span>
+  <button id="reset" title="Zurücksetzen">↻</button>
+  <button id="back" title="Teilschritt zurück">◀</button>
+  <button id="step" class="primary" title="Nächster Teilschritt">▶ Schritt</button>
+  <button id="node" title="Bis zum nächsten neuen Knoten">⏭ Knoten</button>
+  <button id="auto" title="Automatisch abspielen">▷ Auto</button>
+ </div>
+ <svg id="plot" viewBox="0 0 870 575" role="img" aria-label="Interaktive RRT-Stern-Baumkonstruktion ohne Hindernisse"></svg>
+ <div class="footer">
+  <div id="phase" class="phase">Start</div>
+  <div class="key">
+   <span><i class="dot" style="background:#3579b9"></i>Baum</span>
+   <span><i class="dot" style="background:#e5a121"></i>Sample / Near</span>
+   <span><i class="dot" style="background:#169764"></i>Parent</span>
+   <span><i class="dot" style="background:#e34545"></i>Rewiring</span>
+  </div>
+ </div>
+ <div class="hint" id="hint">In den Plot klicken: eigenen Sample-Punkt für die nächste Iteration setzen.</div>
+</main>
+<script>
+(()=>{
+'use strict';
+const svg=document.getElementById('plot'),$=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
+const W=870,H=575, xmin=0,xmax=8,ymin=0,ymax=5.3;
+const frame={left:31,top:25,right:31,bottom:25};
+const scale=Math.min((W-frame.left-frame.right)/(xmax-xmin),(H-frame.top-frame.bottom)/(ymax-ymin));
+const x0=frame.left+((W-frame.left-frame.right)-(xmax-xmin)*scale)/2;
+const y0=frame.top+((H-frame.top-frame.bottom)-(ymax-ymin)*scale)/2;
+const point=p=>({x:x0+(p.x-xmin)*scale,y:y0+(ymax-p.y)*scale});
+const stepLen=1.8,nearRadius=2.3;
+const examples=[[7.37,5.42],[.72,.76],[6.48,4.27],[5.26,1.96],[4.78,3.58],[4.6,1.16],[3.49,2.43],[5.65,5.67],[7.33,3.24],[3.59,1.75]];
+// To keep the plot small, samples slightly outside the upper edge are clamped onto the plane.
+const clip=p=>({x:Math.max(xmin+.05,Math.min(xmax-.05,p.x)),y:Math.max(ymin+.05,Math.min(ymax-.05,p.y))});
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),cp=o=>JSON.parse(JSON.stringify(o));
+const find=(s,id)=>s.nodes.find(n=>n.id===id);
+const costFmt=v=>Number(v).toFixed(2);
+let history,at,override=null,timer=null;
+function start(){return {nodes:[{id:0,x:.8,y:2,parent:null,cost:0}],phase:0,iteration:0,sample:null,nearest:null,newPos:null,near:[],best:null,candidates:[],changed:[],oldEdges:[],rejected:false};}
+function isAncestor(s,a,b){let n=find(s,b);while(n){if(n.id===a)return true;n=n.parent===null?null:find(s,n.parent);}return false;}
+function propagate(s,id){const n=find(s,id);for(const c of s.nodes.filter(x=>x.parent===id)){c.cost=n.cost+dist(n,c);propagate(s,c.id);}}
+function next(old){
+ const s=cp(old);
+ if(s.phase===0||s.phase===5){
+  s.phase=1;s.iteration++;
+  // The example samples are deterministic to ensure a demonstrable rewiring.
+  const raw=override|| (s.iteration<=examples.length?{x:examples[s.iteration-1][0],y:examples[s.iteration-1][1]}:{x:.25+7.5*Math.abs(Math.sin(s.iteration*19.19)),y:.25+4.8*Math.abs(Math.cos(s.iteration*10.31))});
+  override=null;s.sample=clip(raw);s.nearest=null;s.newPos=null;s.near=[];s.best=null;s.candidates=[];s.changed=[];s.oldEdges=[];s.rejected=false;
+ }else if(s.phase===1){
+  s.phase=2;
+  const nearest=s.nodes.reduce((a,b)=>dist(b,s.sample)<dist(a,s.sample)-1e-9?b:a);
+  s.nearest=nearest.id;
+  const D=dist(nearest,s.sample);
+  const t=Math.min(1,stepLen/D);
+  s.newPos={x:nearest.x+t*(s.sample.x-nearest.x),y:nearest.y+t*(s.sample.y-nearest.y)};
+  if(D<1e-8){s.rejected=true;s.newPos=null;}
+ }else if(s.phase===2){
+  s.phase=3;
+  if(!s.rejected){
+   s.near=s.nodes.filter(n=>dist(n,s.newPos)<=nearRadius+1e-9).map(n=>n.id);
+   s.candidates=[...new Set([...s.near,s.nearest])].sort((a,b)=>a-b);
+  }
+ }else if(s.phase===3){
+  s.phase=4;
+  if(!s.rejected){
+   const options=s.candidates.map(id=>{const n=find(s,id);return {id,cost:n.cost+dist(n,s.newPos)};});
+   options.sort((a,b)=>a.cost-b.cost||a.id-b.id);
+   const winner=options[0];s.best=winner.id;
+   s.nodes.push({id:s.nodes.length,x:s.newPos.x,y:s.newPos.y,parent:winner.id,cost:winner.cost});
+  }
+ }else if(s.phase===4){
+  s.phase=5;
+  if(!s.rejected){
+   const added=s.nodes[s.nodes.length-1];
+   for(const id of s.near){
+    const n=find(s,id);
+    if(id===0||id===added.parent||isAncestor(s,id,added.id))continue;
+    const nc=added.cost+dist(added,n);
+    if(nc<n.cost-1e-8){
+     s.oldEdges.push({a:cp(find(s,n.parent)),b:cp(n)});
+     n.parent=added.id;n.cost=nc;propagate(s,n.id);s.changed.push(n.id);
+    }
+   }
+  }
+ }
+ return s;
+}
+function add(tag,attrs={},target=svg){const e=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));target.append(e);return e;}
+function line(a,b,attrs={}){const A=point(a),B=point(b);return add('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,...attrs});}
+function circle(p,r,fill,stroke='#fff',sw=2){const a=point(p);return add('circle',{cx:a.x,cy:a.y,r,fill,stroke,'stroke-width':sw});}
+function label(str,x,y,attrs={}){const e=add('text',{x,y,'font-family':'system-ui,Arial,sans-serif','font-size':13,fill:'#53657b',...attrs});e.textContent=str;return e;}
+function render(){
+ const s=history[at];svg.replaceChildren();
+ add('rect',{x:x0,y:y0,width:(xmax-xmin)*scale,height:(ymax-ymin)*scale,fill:'#fbfdff',stroke:'#dce3eb','stroke-width':1.5,rx:5});
+ if(s.phase>=3&&s.phase<=4&&!s.rejected){
+  const p=point(s.newPos);add('circle',{cx:p.x,cy:p.y,r:nearRadius*scale,fill:'#f7ad27','fill-opacity':.055,stroke:'#eca42f','stroke-width':1.5,'stroke-dasharray':'6 6'});
+  for(const id of s.near)line(find(s,id),s.newPos,{stroke:'#d79f47','stroke-width':1.8,'stroke-dasharray':'6 5'});
+ }
+ // Old edges are only visible in the phase where RRT* rewires them.
+ if(s.phase===5)for(const seg of s.oldEdges)line(seg.a,seg.b,{stroke:'#dc4545','stroke-width':2.6,'stroke-dasharray':'6 6',opacity:.65});
+ for(const n of s.nodes){
+  if(n.parent===null)continue;
+  const changed=s.phase===5&&s.changed.includes(n.id);
+  line(find(s,n.parent),n,{stroke:changed?'#e34545':'#397bb7','stroke-width':changed?4.6:2.5,'stroke-linecap':'round'});
+ }
+ if(s.phase>=2&&s.phase<=3&&!s.rejected){
+  line(find(s,s.nearest),s.newPos,{stroke:'#db9e1e','stroke-width':3.6,'stroke-dasharray':'7 5'});
+ }
+ if(s.phase===4&&!s.rejected){line(find(s,s.best),s.newPos,{stroke:'#16a071','stroke-width':5});}
+ for(const n of s.nodes){
+  const changed=s.phase===5&&s.changed.includes(n.id);
+  const near=(s.phase===3||s.phase===4)&&s.near.includes(n.id);
+  circle(n,n.id===0?9:7,n.id===0?'#174c84':changed?'#e34545':near?'#e9aa38':'#3579b9');
+  const p=point(n);label(`q${n.id}`,p.x+9,p.y-11,{fill:changed?'#c53535':'#496277'});
+ }
+ if(s.sample&&s.phase>=1){
+  const a=point(s.sample);circle(s.sample,7,'white','#e4a321',2.8);
+  add('line',{x1:a.x-11,y1:a.y,x2:a.x+11,y2:a.y,stroke:'#e4a321','stroke-width':1.4});
+  add('line',{x1:a.x,y1:a.y-11,x2:a.x,y2:a.y+11,stroke:'#e4a321','stroke-width':1.4});
+ }
+ if(s.newPos&&!s.rejected&&s.phase>=2&&s.phase<=3)circle(s.newPos,6,'#f5c874','#b78a24');
+ if(override&&(s.phase===0||s.phase===5))circle(override,9,'#fff2cf','#e4a321',2.5);
+ if(s.phase===5&&s.changed.length){
+  const ids=s.changed.map(id=>`q${id}`).join(', ');
+  label(`Rewiring: ${ids}`,W-34,37,{'font-size':16,'font-weight':700,fill:'#b92e2e','text-anchor':'end'});
+ }
+ let phaseText=['Start','Sample','Nearest + Steer','Near-Set','Choose-Parent','Rewiring'][s.phase];
+ $('phase').textContent=`${s.iteration?'Iteration '+s.iteration+' · ':''}${phaseText}  ·  ${s.nodes.length} Knoten`;
+ $('hint').textContent=s.phase===5&&s.changed.length?`Neue Eltern: ${s.changed.map(id=>'q'+id).join(', ')} — rote gestrichelte Linien sind die bisherigen Kanten.`:
+  s.phase===4?`Neuer Knoten q${s.nodes.length-1} mit Parent q${s.best} (Pfadkosten ${costFmt(s.nodes[s.nodes.length-1].cost)}).`:
+  s.phase===0||s.phase===5?'In den Plot klicken: eigenen Sample-Punkt für die nächste Iteration setzen.':'▶ Schritt: nächster Teil des RRT*-Algorithmus.';
+ $('back').disabled=at===0;
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}$('auto').textContent='▷ Auto';$('auto').classList.remove('running');}
+function step(){if(at<history.length-1){at++;}else{history.push(next(history[at]));at++;}render();}
+function reset(){stop();override=null;history=[start()];at=0;render();}
+$('step').addEventListener('click',()=>{stop();step();});
+$('back').addEventListener('click',()=>{stop();if(at>0){at--;render();}});
+$('reset').addEventListener('click',reset);
+$('node').addEventListener('click',()=>{stop();let count=0;do{step();count++;}while(history[at].phase!==5&&count<5);});
+$('auto').addEventListener('click',()=>{if(timer){stop();return;}timer=setInterval(step,650);$('auto').textContent='Ⅱ Pause';$('auto').classList.add('running');});
+svg.addEventListener('click',ev=>{
+ const s=history[at];if(s.phase!==0&&s.phase!==5)return;
+ const rect=svg.getBoundingClientRect();const vx=(ev.clientX-rect.left)*W/rect.width;const vy=(ev.clientY-rect.top)*H/rect.height;
+ const p={x:(vx-x0)/scale+xmin,y:ymax-(vy-y0)/scale};
+ if(p.x<xmin||p.x>xmax||p.y<ymin||p.y>ymax)return;
+ stop();history=history.slice(0,at+1);override=p;render();
+});
+window.__rrtSimpleDebug=()=>({at,state:cp(history[at]),history:cp(history),nearRadius,stepLen});
+reset();
+})();
+</script>
+</body></html>

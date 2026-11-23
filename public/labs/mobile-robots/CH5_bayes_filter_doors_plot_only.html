@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>1D Bayes-Filter · Türen</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #fff; }
+    body { font-family: Arial, Helvetica, sans-serif; }
+    main { width: 100%; height: 100%; position: relative; display: flex; justify-content: center; align-items: center; }
+    #scene { width: min(100vw, 166.6667vh); height: min(100vh, 60vw); display: block; user-select: none; }
+    nav { position: absolute; top: max(12px, calc((100vh - min(100vh, 60vw)) / 2 + 16px)); right: max(12px, calc((100vw - min(100vw, 166.6667vh)) / 2 + 20px)); display: flex; gap: 11px; }
+    button { display: grid; place-items: center; width: 45px; height: 45px; border: 1px solid #d1d5db; border-radius: 50%; background: white; cursor: pointer; padding: 10px; box-shadow: 0 2px 4px #0001; }
+    button:hover { background: #f8fafc; }
+    button:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+    button:disabled { opacity: 0.35; cursor: default; }
+    button svg { width: 100%; height: 100%; fill: none; stroke: #334155; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  </style>
+</head>
+<body>
+<main>
+  <svg id="scene" viewBox="0 0 1200 720" role="img" aria-label="Eindimensionaler Bayes-Filter: Wand mit Türen, Roboter, Mess-Likelihood, Positionsprädiktion und aktualisierte Positionsverteilung"></svg>
+  <nav aria-label="Steuerung">
+    <button type="button" id="advance" title="Ein Feld nach rechts" aria-label="Ein Feld nach rechts">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg>
+    </button>
+    <button type="button" id="reset" title="Zurücksetzen" aria-label="Zurücksetzen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.5 6.5"/><path d="M3 4v7h7"/></svg>
+    </button>
+  </nav>
+</main>
+<script>
+(() => {
+  'use strict';
+
+  // Unbounded corridor to the right. Belief arrays grow only as needed.
+  // Likelihood p(z|x) is not normalized across positions.
+  const VISIBLE = 25;
+  const doorsInPeriod = new Set([5, 11, 19]);
+  const isDoor = i => doorsInPeriod.has(i % VISIBLE);
+  const startIndex = 2;
+  const sensor = Object.freeze({
+    pDoorIfDoor: 0.90,
+    pDoorIfWall: 0.10
+  });
+  const motion = Object.freeze({
+    stay: 0.10,
+    plusOne: 0.80,
+    plusTwo: 0.10
+  });
+  const svg = document.getElementById('scene');
+  const advanceButton = document.getElementById('advance');
+  const resetButton = document.getElementById('reset');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const pos = { x0: 72, x1: 1128, wallY: 125, wallH: 95,
+    likelihoodY: 298, predictionY: 430, posteriorY: 562,
+    rowH: 105 };
+  const dx = (pos.x1 - pos.x0) / VISIBLE;
+  const windowStart = () => Math.max(0, trueIndex - 8);
+  const xAt = worldIndex => pos.x0 + (worldIndex - windowStart() + 0.5) * dx;
+
+  let rngState, trueIndex, observation, prediction, likelihood, posterior, k;
+
+  function random() {
+    // Deterministic seed for fully reproducible classroom demonstrations.
+    rngState = (Math.imul(1664525, rngState) + 1013904223) >>> 0;
+    return rngState / 4294967296;
+  }
+  const uniform = () => Array(VISIBLE).fill(1 / VISIBLE);
+  function normalize(values) {
+    const sum = values.reduce((a, b) => a + b, 0);
+    if (!(sum > 0)) throw new Error('Bayes evidence must be positive');
+    return values.map(v => v / sum);
+  }
+
+  function predict(previousPosterior) {
+    // Every cell sends its mass to i, i+1, i+2 (no clipping at plot edge).
+    const next = Array(previousPosterior.length + 2).fill(0);
+    for (let i = 0; i < previousPosterior.length; i++) {
+      next[i] += motion.stay * previousPosterior[i];
+      next[i + 1] += motion.plusOne * previousPosterior[i];
+      next[i + 2] += motion.plusTwo * previousPosterior[i];
+    }
+    return next; // Normalized because each column sums to one.
+  }
+
+  function measure(truePosition) {
+    const pDoor = isDoor(truePosition) ? sensor.pDoorIfDoor : sensor.pDoorIfWall;
+    return random() < pDoor; // Actual noisy binary sensor observation.
+  }
+  function sensorLikelihood(observedDoor) {
+    return Array.from({ length: prediction.length }, (_, i) => {
+      const pDoor = isDoor(i) ? sensor.pDoorIfDoor : sensor.pDoorIfWall;
+      return observedDoor ? pDoor : 1 - pDoor;
+    });
+  }
+  function correct(predicted, like) {
+    return normalize(predicted.map((p, i) => p * like[i]));
+  }
+
+  function reset() {
+    rngState = 0x0F0F2026;
+    k = 0;
+    trueIndex = startIndex;
+    // At time 0, NO motion update. The prediction row is p(x_0).
+    prediction = uniform();
+    observation = measure(trueIndex);
+    likelihood = sensorLikelihood(observation);
+    posterior = correct(prediction, likelihood);
+    render();
+  }
+
+  function step() {
+    // Real robot moves exactly one cell: a possible sample of our motion model.
+    trueIndex++;
+    const previousPosterior = posterior.slice();
+    prediction = predict(previousPosterior);
+    observation = measure(trueIndex);
+    likelihood = sensorLikelihood(observation);
+    posterior = correct(prediction, likelihood);
+    k++;
+    render();
+  }
+
+  function append(tag, attrs = {}, parent = svg) {
+    const element = document.createElementNS(NS, tag);
+    for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, value);
+    parent.appendChild(element);
+    return element;
+  }
+  function clear() { svg.replaceChildren(); }
+
+  function brickWall() {
+    const { x0, x1, wallY, wallH } = pos;
+    append('rect', {x:x0, y:wallY, width:x1-x0, height:wallH, fill:'#ffcfce', stroke:'#292524', 'stroke-width':1.5});
+    const rows = 5, bh = wallH / rows, bw = 31;
+    for (let r = 0; r < rows; r++) {
+      const yy = wallY + r * bh;
+      if (r > 0) append('line', {x1:x0,y1:yy,x2:x1,y2:yy,stroke:'#382725','stroke-width':1.4});
+      const offset = r % 2 ? bw / 2 : 0;
+      for (let xx = x0 + offset; xx < x1; xx += bw) {
+        append('line', {x1:xx,y1:yy,x2:xx,y2:yy+bh,stroke:'#382725','stroke-width':1.4});
+      }
+    }
+    for (let i = windowStart(); i < windowStart() + VISIBLE; i++) {
+      if (!isDoor(i)) continue;
+      const width = dx * 0.63, x = xAt(i) - width/2;
+      append('rect', {x:x-4,y:wallY+6,width:width+8,height:wallH-6,fill:'#201b1b'});
+      append('rect', {x,y:wallY+13,width,height:wallH-13,fill:'#a85210'});
+      append('circle', {cx:x+width-7,cy:wallY+wallH*0.60,r:2.3,fill:'#fbbf24'});
+    }
+  }
+
+  function robot() {
+    const x = xAt(trueIndex), y = pos.wallY + pos.wallH + 12;
+    const group = append('g', { transform:`translate(${x},${y})` });
+    append('rect', {x:-14,y:-12,width:28,height:23,rx:6,fill:'#f22424',stroke:'#7f1d1d','stroke-width':1.6},group);
+    append('rect', {x:-12,y:9,width:7,height:6,rx:1,fill:'#1f2937'},group);
+    append('rect', {x:5,y:9,width:7,height:6,rx:1,fill:'#1f2937'},group);
+    append('circle', {cx:0,cy:-1,r:4,fill:'#fee2e2'},group);
+    append('path', {d:'M 1 -1 L 10 -1 M 7 -4 L 10 -1 L 7 2',fill:'none',stroke:'#991b1b','stroke-width':1.6,'stroke-linejoin':'round'},group);
+    // Sensor indicator communicates actual observation without any label.
+    append('circle', {cx:x,cy:pos.wallY-20,r:7,fill:observation?'#ed311d':'#64748b',stroke:'#fff','stroke-width':2});
+  }
+
+  function drawDensity(rowY, values, color, scale, fullFill=false) {
+    const { x0, x1, rowH } = pos;
+    const yBase = rowY + rowH;
+    const yTop = rowY + 6;
+    const height = yBase-yTop;
+    const yAt = v => yBase - Math.max(0, Math.min(1, v/scale)) * height;
+
+    // Exactly the discrete values, joined with straight segments for plotting.
+    // No curve fitting, no smoothing and no fabricated probability peaks.
+    append('line', {x1:x0,y1:yBase,x2:x1,y2:yBase,stroke:'#3f3f46','stroke-width':3});
+    // Render the visible window only; probabilities stay global and unchanged.
+    const start = windowStart();
+    const shown = Array.from({length: VISIBLE}, (_, j) => values[start + j] ?? 0);
+    const first = xAt(start), last = xAt(start + VISIBLE - 1);
+    const points = shown.map((v,j) => `${xAt(start + j).toFixed(3)},${yAt(v).toFixed(3)}`).join(' ');
+    if (fullFill) {
+      const polygon = `${x0},${yBase} ${first},${yAt(shown[0])} ${points} ${last},${yAt(shown[VISIBLE-1])} ${x1},${yBase}`;
+      append('polygon',{points:polygon,fill:color,'fill-opacity':0.12});
+    }
+    append('polyline', {
+      points, fill:'none', stroke:color, 'stroke-width':4.4,
+      'stroke-linecap':'round','stroke-linejoin':'round'
+    });
+    shown.forEach((v,j) => {
+      append('circle',{cx:xAt(start+j),cy:yAt(v),r:2.9,fill:color});
+    });
+  }
+
+  function render() {
+    clear();
+    append('rect', {x:0,y:0,width:1200,height:720,fill:'#ffffff'});
+    brickWall();
+    robot();
+    // Top: measurement likelihood p(z_k | x_k), NOT a probability distribution.
+    // Middle: predictive belief p(x_k | z_0:k-1, u_1:k).
+    // Bottom: corrected posterior p(x_k | z_0:k, u_1:k).
+    drawDensity(pos.likelihoodY, likelihood, '#e52525', 1.0, false);
+    const sharedScale = Math.max(0.11, ...prediction, ...posterior) * 1.08;
+    drawDensity(pos.predictionY, prediction, '#111827', sharedScale, true);
+    drawDensity(pos.posteriorY, posterior, '#2563eb', sharedScale, true);
+    advanceButton.disabled = false;
+  }
+
+  advanceButton.addEventListener('click', step);
+  resetButton.addEventListener('click', reset);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowRight' || ev.key === ' ') {
+      ev.preventDefault(); step();
+    } else if (ev.key === 'r' || ev.key === 'R') {
+      ev.preventDefault(); reset();
+    }
+  });
+
+  // Diagnostic interface for automated mathematical verification; not visible.
+  window.__bayesTest = {
+    predict, sensorLikelihood, correct,
+    snapshot: () => ({k, trueIndex, observation, prediction:prediction.slice(),
+      likelihood:likelihood.slice(),posterior:posterior.slice()}),
+    step, reset,
+    constants: {VISIBLE, doorsInPeriod:[...doorsInPeriod], sensor, motion}
+  };
+  reset();
+})();
+</script>
+</body>
+</html>
